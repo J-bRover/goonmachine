@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{sync::{Arc, Mutex}, time::Instant};
 
 use macro_procs::ScreenEngine;
 use winit::event::VirtualKeyCode;
@@ -68,6 +68,8 @@ pub struct SpriteEngine {
     pub tool: Tools,
     pub keyboard: Keyboard,
 
+    cart_path: Arc<Mutex<String>>,
+
     selection: Option<(i32, i32, i32, i32)>,
     selection_start_pos: Option<(i32, i32)>,
     moving_selection_content: Option<PixelsType>,
@@ -89,12 +91,13 @@ pub struct SpriteEngine {
 }
 
 impl SpriteEngine {
-    pub fn new(sprite_sheet: Vec<PixelsType>) -> Self {
+    pub fn new(cart_path: Arc<Mutex<String>>, sprite_sheet: Vec<PixelsType>) -> Self {
         SpriteEngine {
             pixels: Colors::pixels(SCREEN_SIZE, SCREEN_SIZE * 2),
             mouse: MousePress::default(),
             selected_color: Colors::Black,
             sprite_sheet,
+            cart_path,
             tool: Tools::Pencil,
             selection: None,
             selection_start_pos: None,
@@ -502,7 +505,8 @@ impl SpriteEngine {
                 }
                 Utils::Save => {
                     self.upto_date = true;
-                    let _ = update_sprites(&self.sprite_sheet);
+                    let p = self.cart_path.lock().unwrap().to_string();
+                    let _ = update_sprites(&p, &self.sprite_sheet);
                 }
             }
         }
@@ -611,7 +615,8 @@ impl SpriteEngine {
         {
             let adding = vec![Colors::pixels(SPRITE_SIZE, SPRITE_SIZE); SPRITES_TO_ADD];
             self.sprite_sheet.extend(adding);
-            let _ = update_sprites(&self.sprite_sheet);
+            let p = self.cart_path.lock().unwrap().to_string();
+            let _ = update_sprites(&p, &self.sprite_sheet);
         }
     }
 

@@ -1,8 +1,6 @@
 use rayon::prelude::*;
 use std::{
-    error::Error,
-    path::Path,
-    time::{Duration, Instant},
+    error::Error, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}
 };
 
 use notify::RecursiveMode;
@@ -52,11 +50,12 @@ enum StateEngines {
  * Screen engines should auto derive the ScreenEngine trait
  */
 pub struct RicoEngine {
+    cart_path: Arc<Mutex<String>>,
     nav_engine: NavEngine,
     state_engines: Vec<StateEngines>,
 }
 
-fn watch_folder() -> Result<(), Box<dyn Error>> {
+fn watch_folder(path: Arc<Mutex<String>>) -> Result<(), Box<dyn Error>> {
     let (tx, rx) = channel();
 
     // Create a debouncer to avoid getting multiple events for the same change
@@ -70,7 +69,9 @@ fn watch_folder() -> Result<(), Box<dyn Error>> {
             Ok(events) => {
                 for event in events {
                     if event.kind == DebouncedEventKind::Any {
-                        update_scripts()?;
+                        let p = path.lock().unwrap().to_string();
+                        dbg!(&p);
+                        update_scripts(&p)?;
                     }
                 }
             }
@@ -81,29 +82,38 @@ fn watch_folder() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-impl Default for RicoEngine {
-    fn default() -> Self {
-        let cart = load_cartridge().expect("Could not load/create cartridge");
-        let sprite_eng = SpriteEngine::new(cart.sprite_sheet.clone());
+impl RicoEngine {
+    pub fn new(path: String) -> Self {
+        let cart_path = Arc::from(Mutex::from(path));
+        let path_clone = cart_path.clone();
+        let mut eng = RicoEngine {
+            nav_engine: NavEngine::new(vec!["Game".to_string(), "Sprite".to_string()]),
+            state_engines: Vec::new(),
+            cart_path
+        };
+
+        std::thread::spawn(|| {
+            watch_folder(path_clone).expect("Failed to start folder watcher");
+        });
+
+        let p = eng.cart_path.lock().unwrap().to_string().clone();
+        eng.load(p);
+        
+        eng
+    }
+
+    pub fn load(&mut self, path: String) {
+        let p = self.cart_path.lock().unwrap().to_string().clone();
+        let cart = load_cartridge(&p).expect("Could not load/create cartridge");
+        let sprite_eng = SpriteEngine::new(self.cart_path.clone(), cart.sprite_sheet.clone());
         let game_eng = GameEngine::new(cart);
         let state_engines = vec![
             StateEngines::GameEngine(Box::new(game_eng)),
             StateEngines::SpriteEngine(Box::new(sprite_eng)),
         ];
-
-        std::thread::spawn(|| {
-            watch_folder().expect("Failed to start folder watcher");
-        });
-
-        //Change here if want diff names for engines
-        RicoEngine {
-            nav_engine: NavEngine::new(vec!["Game".to_string(), "Sprite".to_string()]),
-            state_engines,
-        }
+        *self.cart_path.lock().unwrap() = path;
+        self.state_engines = state_engines;
     }
-}
-
-impl RicoEngine {
     //Base boot function, needs to take in whole self cause borrowing bs
     pub fn start(mut self) -> Result<(), Box<dyn std::error::Error>> {
         let event_loop = EventLoop::new();
@@ -271,7 +281,7 @@ impl RicoEngine {
                 handle_engine_update(buffer, console, 0, WINDOW_WIDTH + (NAV_BAR_HEIGHT * SCALE));
 
                 if console.restart {
-                    let cart = get_cart().expect("Could not load/create cartridge");
+                    let cart = get_cart(&self.cart_path.lock().unwrap().to_string()).expect("Could not load/create cartridge");
                     let game_eng = GameEngine::new(cart);
                     **eng = game_eng;
                 }

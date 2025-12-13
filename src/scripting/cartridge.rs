@@ -6,6 +6,7 @@ use std::{
     path::Path,
 };
 
+use base64::{engine::general_purpose, Engine as _};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 
 use crate::{
@@ -22,10 +23,9 @@ pub struct Cartridge {
 }
 
 pub const PATH: &str = "r32/";
-const BIN_PATH: &str = "main.r32";
 
-const HELLO_WORLD: &str = "
-function start()
+const HELLO_WORLD: &str = 
+"function start()
     rico:log(\"Welcome to RICO-32!\")
     rico:set_frame_rate(60)
 end
@@ -40,6 +40,14 @@ function update(dt)
     end
 end";
 
+fn encode(input: &Vec<u8>) -> String {
+    general_purpose::STANDARD.encode(input)
+}
+
+fn decode(input: &Vec<u8>) -> Vec<u8> {
+    general_purpose::STANDARD.decode(input).expect("Could not decode")
+}
+
 impl Default for Cartridge {
     fn default() -> Self {
         let mut scripts = HashMap::new();
@@ -51,18 +59,24 @@ impl Default for Cartridge {
     }
 }
 
-fn write_cart(cart: &Cartridge) -> Result<(), Box<dyn Error>> {
+fn write_cart(bin_path: &str, cart: &Cartridge) -> Result<(), Box<dyn Error>> {
     let encoded = bincode::encode_to_vec(cart, bincode::config::standard())?;
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
     encoder.write_all(&encoded)?;
     let compressed_bytes = encoder.finish()?;
-    fs::write(BIN_PATH, compressed_bytes)?;
+    if bin_path.ends_with(".r32.txt") {
+        let base_64 = encode(&compressed_bytes);
+        fs::write(bin_path, base_64)?;
+    } else {
+        fs::write(bin_path, compressed_bytes)?;
+    }
     Ok(())
 }
 
-fn load_file() -> Result<Cartridge, Box<dyn Error>> {
-    let compressed_bytes = fs::read(BIN_PATH)?;
-    let mut decoder = GzDecoder::new(&compressed_bytes[..]);
+fn load_file(bin_path: &str) -> Result<Cartridge, Box<dyn Error>> {
+    let mut bytes = fs::read(&bin_path)?;
+    if bin_path.ends_with(".r32.txt") { bytes = decode(&bytes) };
+    let mut decoder = GzDecoder::new(&bytes[..]);
     let mut decompressed = Vec::new();
     decoder.read_to_end(&mut decompressed)?;
     let (cart, _) = bincode::decode_from_slice(&decompressed, standard())?;
@@ -70,19 +84,19 @@ fn load_file() -> Result<Cartridge, Box<dyn Error>> {
     Ok(cart)
 }
 
-pub fn get_cart() -> Result<Cartridge, Box<dyn Error>> {
-    match load_file() {
+pub fn get_cart(bin_path: &str) -> Result<Cartridge, Box<dyn Error>> {
+    match load_file(bin_path) {
         Ok(data) => Ok(data),
         Err(_) => {
             let cart = Cartridge::default();
-            write_cart(&cart)?;
+            write_cart(bin_path, &cart)?;
             Ok(cart)
         }
     }
 }
 
-pub fn load_cartridge() -> Result<Cartridge, Box<dyn Error>> {
-    let cart = get_cart()?;
+pub fn load_cartridge(bin_path: &str) -> Result<Cartridge, Box<dyn Error>> {
+    let cart = get_cart(bin_path)?;
 
     if Path::new(PATH).exists() {
         fs::remove_dir_all(PATH)?;
@@ -99,15 +113,15 @@ pub fn load_cartridge() -> Result<Cartridge, Box<dyn Error>> {
     Ok(cart)
 }
 
-pub fn update_sprites(sprite_sheet: &[PixelsType]) -> Result<(), Box<dyn Error>> {
-    let mut cart = get_cart()?;
+pub fn update_sprites(bin_path: &str, sprite_sheet: &[PixelsType]) -> Result<(), Box<dyn Error>> {
+    let mut cart = get_cart(bin_path)?;
     cart.sprite_sheet = sprite_sheet.to_vec();
-    write_cart(&cart)?;
+    write_cart(bin_path, &cart)?;
     Ok(())
 }
 
-pub fn update_scripts() -> Result<(), Box<dyn Error>> {
-    let mut cart = get_cart()?;
+pub fn update_scripts(bin_path: &str) -> Result<(), Box<dyn Error>> {
+    let mut cart = get_cart(bin_path)?;
     cart.scripts.clear();
 
     for entry in WalkDir::new(PATH)
@@ -122,7 +136,7 @@ pub fn update_scripts() -> Result<(), Box<dyn Error>> {
         cart.scripts.insert(rel, contents);
     }
 
-    write_cart(&cart)?;
+    write_cart(bin_path, &cart)?;
 
     Ok(())
 }
