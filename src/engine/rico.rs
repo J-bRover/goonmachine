@@ -20,9 +20,7 @@ use winit::{
 
 use super::{game::GameEngine, nav_bar::NavEngine, sprite::SpriteEngine};
 use crate::{
-    input::{keyboard::Keyboard, mouse::MousePress},
-    render::colors::Colors,
-    scripting::cartridge::{get_cart, load_cartridge, update_scripts, PATH},
+    engine::terminal::TerminalEngine, input::{keyboard::Keyboard, mouse::MousePress}, render::colors::Colors, scripting::cartridge::{get_cart, load_cartridge, update_scripts, PATH}
 };
 
 pub const SCREEN_SIZE: usize = 128;
@@ -46,6 +44,7 @@ pub trait ScreenEngine {
 enum StateEngines {
     GameEngine(Box<GameEngine>),
     SpriteEngine(Box<SpriteEngine>),
+    TerminalEngine(Box<TerminalEngine>)
 }
 
 /* Add bindings for diff engines in this struct in the vector
@@ -92,7 +91,7 @@ impl RicoEngine {
         let cart_path = Arc::from(Mutex::from(path));
         let path_clone = cart_path.clone();
         let mut eng = RicoEngine {
-            nav_engine: NavEngine::new(vec!["Game".to_string(), "Sprite".to_string()]),
+            nav_engine: NavEngine::new(vec!["Game".to_string(), "Sprite".to_string(), "Term".to_string()]),
             state_engines: Vec::new(),
             cart_path,
         };
@@ -113,13 +112,20 @@ impl RicoEngine {
         let cart = load_cartridge(&p).expect("Could not load/create cartridge");
         let sprite_eng = SpriteEngine::new(self.cart_path.clone(), cart.sprite_sheet.clone());
         let game_eng = GameEngine::new(cart);
-        let state_engines = vec![
-            StateEngines::GameEngine(Box::new(game_eng)),
-            StateEngines::SpriteEngine(Box::new(sprite_eng)),
-        ];
+        if self.state_engines.is_empty() {
+            let term_eng = TerminalEngine::default();
+            self.state_engines = vec![
+                StateEngines::GameEngine(Box::new(game_eng)),
+                StateEngines::SpriteEngine(Box::new(sprite_eng)),
+                StateEngines::TerminalEngine(Box::new(term_eng)),
+            ];
+        } else {
+            self.state_engines[0] = StateEngines::GameEngine(Box::new(game_eng));
+            self.state_engines[1] = StateEngines::SpriteEngine(Box::new(sprite_eng));
+        }
         *self.cart_path.lock().unwrap() = path;
-        self.state_engines = state_engines;
     }
+
     //Base boot function, needs to take in whole self cause borrowing bs
     pub fn start(mut self) -> Result<(), Box<dyn std::error::Error>> {
         let event_loop = EventLoop::new();
@@ -167,6 +173,9 @@ impl RicoEngine {
                                 }
                                 StateEngines::SpriteEngine(ref mut eng) => {
                                     bind_keyboard(&mut eng.keyboard, input.state, keycode);
+                                },
+                                StateEngines::TerminalEngine(ref mut eng) => {
+                                    bind_keyboard(&mut eng.keyboard, input.state, keycode);
                                 }
                             }
 
@@ -206,7 +215,8 @@ impl RicoEngine {
                             }
                             StateEngines::SpriteEngine(ref mut eng) => {
                                 bind_mouse_input(&mut eng.mouse, button, state);
-                            }
+                            },
+                            StateEngines::TerminalEngine(_) => {}
                         };
                     }
 
@@ -252,7 +262,8 @@ impl RicoEngine {
                                     WINDOW_WIDTH,
                                     WINDOW_WIDTH * 2,
                                 );
-                            }
+                            },
+                            StateEngines::TerminalEngine(_) => {}
                         }
                     }
 
@@ -294,6 +305,10 @@ impl RicoEngine {
                 }
             }
             StateEngines::SpriteEngine(ref mut eng) => {
+                eng.update();
+                handle_engine_update(buffer, &mut **eng, 0, NAV_BAR_HEIGHT * SCALE);
+            },
+            StateEngines::TerminalEngine(ref mut eng) => {
                 eng.update();
                 handle_engine_update(buffer, &mut **eng, 0, NAV_BAR_HEIGHT * SCALE);
             }
