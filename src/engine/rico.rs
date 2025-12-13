@@ -1,6 +1,9 @@
 use rayon::prelude::*;
 use std::{
-    error::Error, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}
+    error::Error,
+    path::Path,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
 
 use notify::RecursiveMode;
@@ -67,12 +70,14 @@ fn watch_folder(path: Arc<Mutex<String>>) -> Result<(), Box<dyn Error>> {
     for result in rx {
         match result {
             Ok(events) => {
-                for event in events {
-                    if event.kind == DebouncedEventKind::Any {
-                        let p = path.lock().unwrap().to_string();
-                        dbg!(&p);
-                        update_scripts(&p)?;
-                    }
+                let should_update = events
+                    .iter()
+                    .any(|e| e.kind == DebouncedEventKind::Any && e.path.extension().and_then(|s| s.to_str()) == Some("lua"));
+
+                if should_update {
+                    let p = path.lock().unwrap().to_string();
+                    dbg!(&p);
+                    update_scripts(&p)?;
                 }
             }
             Err(e) => println!("Watch error: {:?}", e),
@@ -89,16 +94,17 @@ impl RicoEngine {
         let mut eng = RicoEngine {
             nav_engine: NavEngine::new(vec!["Game".to_string(), "Sprite".to_string()]),
             state_engines: Vec::new(),
-            cart_path
+            cart_path,
         };
-
-        std::thread::spawn(|| {
-            watch_folder(path_clone).expect("Failed to start folder watcher");
-        });
 
         let p = eng.cart_path.lock().unwrap().to_string().clone();
         eng.load(p);
-        
+
+        std::thread::spawn(|| match watch_folder(path_clone) {
+            Ok(_) => println!("Watcher exited normally"),
+            Err(e) => println!("Watcher error: {:?}", e),
+        });
+
         eng
     }
 
@@ -281,7 +287,8 @@ impl RicoEngine {
                 handle_engine_update(buffer, console, 0, WINDOW_WIDTH + (NAV_BAR_HEIGHT * SCALE));
 
                 if console.restart {
-                    let cart = get_cart(&self.cart_path.lock().unwrap().to_string()).expect("Could not load/create cartridge");
+                    let cart = get_cart(&self.cart_path.lock().unwrap().to_string())
+                        .expect("Could not load/create cartridge");
                     let game_eng = GameEngine::new(cart);
                     **eng = game_eng;
                 }

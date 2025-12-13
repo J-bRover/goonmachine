@@ -24,8 +24,7 @@ pub struct Cartridge {
 
 pub const PATH: &str = "r32/";
 
-const HELLO_WORLD: &str = 
-"function start()
+const HELLO_WORLD: &str = "function start()
     rico:log(\"Welcome to RICO-32!\")
     rico:set_frame_rate(60)
 end
@@ -74,8 +73,10 @@ fn write_cart(bin_path: &str, cart: &Cartridge) -> Result<(), Box<dyn Error>> {
 }
 
 fn load_file(bin_path: &str) -> Result<Cartridge, Box<dyn Error>> {
-    let mut bytes = fs::read(&bin_path)?;
-    if bin_path.ends_with(".r32.txt") { bytes = decode(&bytes) };
+    let mut bytes = fs::read(bin_path)?;
+    if bin_path.ends_with(".r32.txt") {
+        bytes = decode(&bytes)
+    };
     let mut decoder = GzDecoder::new(&bytes[..]);
     let mut decompressed = Vec::new();
     decoder.read_to_end(&mut decompressed)?;
@@ -87,7 +88,8 @@ fn load_file(bin_path: &str) -> Result<Cartridge, Box<dyn Error>> {
 pub fn get_cart(bin_path: &str) -> Result<Cartridge, Box<dyn Error>> {
     match load_file(bin_path) {
         Ok(data) => Ok(data),
-        Err(_) => {
+        Err(e) => {
+            dbg!(e);
             let cart = Cartridge::default();
             write_cart(bin_path, &cart)?;
             Ok(cart)

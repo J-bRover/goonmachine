@@ -1,4 +1,7 @@
-use std::{sync::{Arc, Mutex}, time::Instant};
+use std::{
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use macro_procs::ScreenEngine;
 use winit::event::VirtualKeyCode;

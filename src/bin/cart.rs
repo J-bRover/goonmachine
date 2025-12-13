@@ -21,7 +21,7 @@ fn main() {
 fn encode(input: &str) {
     let bytes = fs::read(input).unwrap_or_else(|_| panic!("Could not find {}", input));
     let encoded = general_purpose::STANDARD.encode(&bytes);
-    println!("{}", encoded);
+    print!("{}", encoded);
 }
 
 fn decode(input: &str) {
