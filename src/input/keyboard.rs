@@ -48,6 +48,8 @@ pub fn str_from_key(keycode: &VirtualKeyCode) -> &str {
         VirtualKeyCode::Z => "Z",
         VirtualKeyCode::Space => " ",
         VirtualKeyCode::Period => ".",
+        VirtualKeyCode::Slash => "/",
+        VirtualKeyCode::Backslash => "\\",
         VirtualKeyCode::Left => "Left",
         VirtualKeyCode::Up => "Up",
         VirtualKeyCode::Right => "Right",
@@ -106,6 +108,8 @@ pub fn key_from_str(str: &str) -> Option<VirtualKeyCode> {
         "Enter" => Some(VirtualKeyCode::Return),
         "Space" => Some(VirtualKeyCode::Space),
         "Period" => Some(VirtualKeyCode::Period),
+        "Slash" => Some(VirtualKeyCode::Slash),
+        "Backslash" => Some(VirtualKeyCode::Backslash),
         _ => None,
     }
 }

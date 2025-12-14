@@ -58,7 +58,7 @@ impl Default for Cartridge {
     }
 }
 
-fn write_cart(bin_path: &str, cart: &Cartridge) -> Result<(), Box<dyn Error>> {
+pub fn write_cart(bin_path: &str, cart: &Cartridge) -> Result<(), Box<dyn Error>> {
     let encoded = bincode::encode_to_vec(cart, bincode::config::standard())?;
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
     encoder.write_all(&encoded)?;
@@ -72,7 +72,7 @@ fn write_cart(bin_path: &str, cart: &Cartridge) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn load_file(bin_path: &str) -> Result<Cartridge, Box<dyn Error>> {
+pub fn get_cart(bin_path: &str) -> Result<Cartridge, Box<dyn Error>> {
     let mut bytes = fs::read(bin_path)?;
     if bin_path.ends_with(".r32.txt") {
         bytes = decode(&bytes)
@@ -85,23 +85,18 @@ fn load_file(bin_path: &str) -> Result<Cartridge, Box<dyn Error>> {
     Ok(cart)
 }
 
-pub fn get_cart(bin_path: &str) -> Result<Cartridge, Box<dyn Error>> {
-    match load_file(bin_path) {
-        Ok(data) => Ok(data),
-        Err(e) => {
-            dbg!(e);
-            let cart = Cartridge::default();
-            write_cart(bin_path, &cart)?;
-            Ok(cart)
-        }
-    }
-}
-
 pub fn load_cartridge(bin_path: &str) -> Result<Cartridge, Box<dyn Error>> {
     let cart = get_cart(bin_path)?;
 
     if Path::new(PATH).exists() {
-        fs::remove_dir_all(PATH)?;
+        for entry in fs::read_dir(PATH)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                fs::remove_dir_all(path)?;
+            } else {
+                fs::remove_file(path)?;
+            }
+        }
     }
     for (file, content) in &cart.scripts {
         let f_path = PATH.to_owned() + file;

@@ -20,7 +20,7 @@ use winit::{
 
 use super::{game::GameEngine, nav_bar::NavEngine, sprite::SpriteEngine};
 use crate::{
-    engine::terminal::TerminalEngine, input::{keyboard::Keyboard, mouse::MousePress}, render::colors::Colors, scripting::cartridge::{get_cart, load_cartridge, update_scripts, PATH}
+    engine::terminal::{Commands, TerminalEngine}, input::{keyboard::Keyboard, mouse::MousePress}, render::colors::Colors, scripting::{cartridge::{get_cart, load_cartridge, update_scripts, write_cart, Cartridge, PATH}, lua::LogTypes}
 };
 
 pub const SCREEN_SIZE: usize = 128;
@@ -69,12 +69,13 @@ fn watch_folder(path: Arc<Mutex<String>>) -> Result<(), Box<dyn Error>> {
     for result in rx {
         match result {
             Ok(events) => {
+                dbg!(&events);
                 let should_update = events
                     .iter()
                     .any(|e| e.kind == DebouncedEventKind::Any && e.path.extension().and_then(|s| s.to_str()) == Some("lua"));
 
                 if should_update {
-                    let p = path.lock().unwrap().to_string();
+                    let p = path.lock().expect("Couldn't resolve path").to_string();
                     update_scripts(&p)?;
                 }
             }
@@ -95,21 +96,27 @@ impl RicoEngine {
             cart_path,
         };
 
-        let p = eng.cart_path.lock().unwrap().to_string().clone();
-        eng.load(p);
-
         std::thread::spawn(|| match watch_folder(path_clone) {
             Ok(_) => println!("Watcher exited normally"),
             Err(e) => println!("Watcher error: {:?}", e),
         });
 
+        let p = eng.cart_path.lock().unwrap().to_string().clone();
+        let cart = match load_cartridge(&p) {
+            Ok(cart) => cart,
+            Err(_) => {
+                let cart = Cartridge::default();
+                let _ = write_cart(&p, &cart);
+                cart
+            }
+        };
+        eng.load(cart, p);
+
         eng
     }
 
-    pub fn load(&mut self, path: String) {
-        let p = self.cart_path.lock().unwrap().to_string().clone();
-        let cart = load_cartridge(&p).expect("Could not load/create cartridge");
-        let sprite_eng = SpriteEngine::new(self.cart_path.clone(), cart.sprite_sheet.clone());
+    pub fn load(&mut self, cart: Cartridge, path: String) {
+        let sprite_eng = SpriteEngine::new(path.clone(), cart.sprite_sheet.clone());
         let game_eng = GameEngine::new(cart);
         if self.state_engines.is_empty() {
             let term_eng = TerminalEngine::default();
@@ -278,8 +285,11 @@ impl RicoEngine {
         self.nav_engine.update();
         handle_engine_update(buffer, &mut self.nav_engine, 0, 0);
 
-        match self.state_engines[self.nav_engine.selected] {
-            StateEngines::GameEngine(ref mut eng) => {
+        let engine = &mut self.state_engines[self.nav_engine.selected];
+
+        let mut to_be_loaded: Option<String> = None;
+        match engine {
+            StateEngines::GameEngine(eng) => {
                 if self.nav_engine.just_switched {
                     eng.console_engine.last_time = Instant::now();
                 }
@@ -303,13 +313,52 @@ impl RicoEngine {
                     **eng = game_eng;
                 }
             }
-            StateEngines::SpriteEngine(ref mut eng) => {
+            StateEngines::SpriteEngine(eng) => {
                 eng.update();
                 handle_engine_update(buffer, &mut **eng, 0, NAV_BAR_HEIGHT * SCALE);
             },
-            StateEngines::TerminalEngine(ref mut eng) => {
+            StateEngines::TerminalEngine(eng) => {
                 eng.update();
+
+                for command in eng.commands.clone() {
+                    match command {
+                        Commands::Load(file) => {
+                            to_be_loaded = Some(file);
+                        },
+                        Commands::Save(file) => {
+                            match get_cart(&self.cart_path.lock().unwrap()) {
+                                Ok(cart) => {
+                                    match write_cart(&file, &cart) {
+                                        Ok(_) => eng.add_log(LogTypes::Ok(format!("Successfully saved cartridge to {file}").to_string())),
+                                        Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
+                                    }
+                                },
+                                Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
+                            }
+                        },
+                        Commands::Export(file) => {
+                            eng.add_log(LogTypes::Ok("Exporting not implemented".to_string()));
+                        },
+                    }
+                }
+
                 handle_engine_update(buffer, &mut **eng, 0, NAV_BAR_HEIGHT * SCALE);
+            }
+        }
+
+        if let Some(file) = to_be_loaded {
+            match load_cartridge(&file) {
+                Ok(cart) => {
+                    self.load(cart, file.clone());
+                    if let StateEngines::TerminalEngine(ref mut eng) = self.state_engines[2] {
+                        eng.add_log(LogTypes::Ok(format!("Successfully loaded cartridge from {file}").to_string()));
+                    }
+                },
+                Err(err) => {
+                    if let StateEngines::TerminalEngine(ref mut eng) = self.state_engines[2] {
+                        eng.add_log(LogTypes::Err(err.to_string()));
+                    }
+                }
             }
         }
     }

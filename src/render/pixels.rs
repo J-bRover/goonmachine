@@ -87,14 +87,16 @@ pub fn print_scr_mid(pixels: &mut PixelsType, x: i32, y: i32, col: Colors, msg: 
         let c = msg.as_bytes().get(i).unwrap();
         let mut idx: usize = (*c).into();
 
+        idx -= 32;
         if idx >= BITMAP4X6.len() {
-            idx = 32;
+            idx = 0;
         }
+        idx *= 6;
 
-        for dx in 0..4 {
-            for (dy, row) in BITMAP4X6[idx].iter().enumerate().take(8) {
-                //println!("{} {}", idx, BI
-                if (row >> (3 - dx)) & 1 == 1 {
+        for dy in 0..6 {
+            let row = BITMAP4X6[idx + dy];
+            for dx in 0..4 {
+                if (row >> (7 - dx)) & 1 == 1 {
                     set_pix(pixels, y + dy as i32, x + dx + i as i32 * 4, col);
                 }
             }

@@ -1,5 +1,4 @@
 use std::{
-    sync::{Arc, Mutex},
     time::Instant,
 };
 
@@ -71,7 +70,7 @@ pub struct SpriteEngine {
     pub tool: Tools,
     pub keyboard: Keyboard,
 
-    cart_path: Arc<Mutex<String>>,
+    cart_path: String,
 
     selection: Option<(i32, i32, i32, i32)>,
     selection_start_pos: Option<(i32, i32)>,
@@ -94,7 +93,7 @@ pub struct SpriteEngine {
 }
 
 impl SpriteEngine {
-    pub fn new(cart_path: Arc<Mutex<String>>, sprite_sheet: Vec<PixelsType>) -> Self {
+    pub fn new(cart_path: String, sprite_sheet: Vec<PixelsType>) -> Self {
         SpriteEngine {
             pixels: Colors::pixels(SCREEN_SIZE, SCREEN_SIZE * 2),
             mouse: MousePress::default(),
@@ -508,7 +507,7 @@ impl SpriteEngine {
                 }
                 Utils::Save => {
                     self.upto_date = true;
-                    let p = self.cart_path.lock().unwrap().to_string();
+                    let p = self.cart_path.clone();
                     let _ = update_sprites(&p, &self.sprite_sheet);
                 }
             }
@@ -618,7 +617,7 @@ impl SpriteEngine {
         {
             let adding = vec![Colors::pixels(SPRITE_SIZE, SPRITE_SIZE); SPRITES_TO_ADD];
             self.sprite_sheet.extend(adding);
-            let p = self.cart_path.lock().unwrap().to_string();
+            let p = self.cart_path.clone();
             let _ = update_sprites(&p, &self.sprite_sheet);
         }
     }
