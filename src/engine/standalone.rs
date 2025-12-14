@@ -1,38 +1,24 @@
-use pixels::{Pixels, SurfaceTexture};
 use crate::{
     engine::{
         game::GameEngine,
-        rico::{bind_keyboard, bind_mouse_input, bind_mouse_move, handle_engine_update, ICON_BYTES, SCALE, SCREEN_SIZE},
+        rico::{
+            bind_keyboard, bind_mouse_input, bind_mouse_move, handle_engine_update, SCALE,
+            SCREEN_SIZE,
+        },
     },
     scripting::cartridge::Cartridge,
 };
+use pixels::Pixels;
 use winit::{
-    dpi::LogicalSize,
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::{Icon, WindowBuilder},
+    window::Window,
 };
 
 pub const WINDOW_WIDTH: usize = SCREEN_SIZE * SCALE;
 pub const WINDOW_HEIGHT: usize = SCREEN_SIZE * SCALE;
 
-pub fn start(cart: Cartridge) {
-    let event_loop = EventLoop::new();
-    let icon_img = image::load_from_memory(ICON_BYTES).expect("Failed to load icon").to_rgba8();
-    let (width, height) = icon_img.dimensions();
-    let icon = Icon::from_rgba(icon_img.into_raw(), width, height).expect("Could not load icon");
-    let window = WindowBuilder::new()
-        .with_title("RICO-32")
-        .with_window_icon(Some(icon))
-        .with_resizable(false)
-        .with_inner_size(LogicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64))
-        .build(&event_loop)
-        .expect("Could not create RICO-32 window!");
-
-    let surface_texture = SurfaceTexture::new(WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32, &window);
-    let mut pixels = Pixels::new(WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32, surface_texture)
-        .expect("Could not start pixels");
-
+pub fn start(cart: Cartridge, event_loop: EventLoop<()>, window: Window, mut pixels: Pixels) {
     let mut eng = GameEngine::new(cart);
 
     event_loop.run(move |event, _, control_flow| {
@@ -90,4 +76,3 @@ pub fn start(cart: Cartridge) {
         }
     })
 }
-
