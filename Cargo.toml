@@ -7,6 +7,8 @@ license = "MIT"
 repository = "https://github.com/RICO-32/RICO-32"
 default-run = "rico-32"
 
+[build-dependencies]
+winres = "0.1"
 
 [dependencies]
 macro_procs = { path = "./macro_procs", version = "0.1.0" }
@@ -20,3 +22,4 @@ flate2 = "1.1.5"
 base64 = "0.22.1"
 notify = "8.2.0"
 notify-debouncer-mini = "0.7.0"
+image = "0.25.9"

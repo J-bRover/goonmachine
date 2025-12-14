@@ -17,7 +17,7 @@ use winit::{
     dpi::{LogicalPosition, LogicalSize},
     event::{ElementState, Event, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
+    window::{Icon, WindowBuilder},
 };
 
 use super::{game::GameEngine, nav_bar::NavEngine, sprite::SpriteEngine};
@@ -32,6 +32,8 @@ use crate::{
         lua::LogTypes,
     },
 };
+
+const ICON_BYTES: &[u8] = include_bytes!("../../assets/logo.png");
 
 #[cfg(target_os = "linux")]
 fn runtime_bytes() -> Result<&'static [u8], Box<dyn Error>> {
@@ -188,8 +190,13 @@ impl RicoEngine {
     //Base boot function, needs to take in whole self cause borrowing bs
     pub fn start(mut self) -> Result<(), Box<dyn std::error::Error>> {
         let event_loop = EventLoop::new();
+        let icon_img = image::load_from_memory(ICON_BYTES).expect("Failed to load icon").to_rgba8();
+        let (width, height) = icon_img.dimensions();
+        let icon =
+            Icon::from_rgba(icon_img.into_raw(), width, height).expect("Could not load icon");
         let window = WindowBuilder::new()
             .with_title("RICO-32")
+            .with_window_icon(Some(icon))
             .with_resizable(false)
             .with_inner_size(LogicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64))
             .build(&event_loop)?;
