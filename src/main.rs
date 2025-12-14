@@ -1,3 +1,5 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 use rico_32::engine::rico::RicoEngine;
 
 fn main() {

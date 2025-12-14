@@ -1,3 +1,5 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 use pixels::{Pixels, SurfaceTexture};
 use rico_32::{
     engine::{
