@@ -75,7 +75,6 @@ fn watch_folder(path: Arc<Mutex<String>>) -> Result<(), Box<dyn Error>> {
 
                 if should_update {
                     let p = path.lock().unwrap().to_string();
-                    dbg!(&p);
                     update_scripts(&p)?;
                 }
             }

@@ -8,6 +8,56 @@ pub struct Keyboard {
     pub keys_just_pressed: HashSet<VirtualKeyCode>,
 }
 
+pub fn str_from_key(keycode: &VirtualKeyCode) -> &str {
+    match keycode {
+        VirtualKeyCode::Key1 => "1" ,
+        VirtualKeyCode::Key2 => "2",
+        VirtualKeyCode::Key3 => "3",
+        VirtualKeyCode::Key4 => "4",
+        VirtualKeyCode::Key5 => "5",
+        VirtualKeyCode::Key6 => "6",
+        VirtualKeyCode::Key7 => "7",
+        VirtualKeyCode::Key8 => "8",
+        VirtualKeyCode::Key9 => "9",
+        VirtualKeyCode::Key0 => "0",
+        VirtualKeyCode::A => "A",
+        VirtualKeyCode::B => "B",
+        VirtualKeyCode::C => "C",
+        VirtualKeyCode::D => "D",
+        VirtualKeyCode::E => "E",
+        VirtualKeyCode::F => "F",
+        VirtualKeyCode::G => "G",
+        VirtualKeyCode::H => "H",
+        VirtualKeyCode::I => "I",
+        VirtualKeyCode::J => "J",
+        VirtualKeyCode::K => "K",
+        VirtualKeyCode::L => "L",
+        VirtualKeyCode::M => "M",
+        VirtualKeyCode::N => "N",
+        VirtualKeyCode::O => "O",
+        VirtualKeyCode::P => "P",
+        VirtualKeyCode::Q => "Q",
+        VirtualKeyCode::R => "R",
+        VirtualKeyCode::S => "S",
+        VirtualKeyCode::T => "T",
+        VirtualKeyCode::U => "U",
+        VirtualKeyCode::V => "V",
+        VirtualKeyCode::W => "W",
+        VirtualKeyCode::X => "X",
+        VirtualKeyCode::Y => "Y",
+        VirtualKeyCode::Z => "Z",
+        VirtualKeyCode::Space => " ",
+        VirtualKeyCode::Period => ".",
+        VirtualKeyCode::Left => "Left",
+        VirtualKeyCode::Up => "Up",
+        VirtualKeyCode::Right => "Right",
+        VirtualKeyCode::Down => "Down",
+        VirtualKeyCode::Back => "Back",
+        VirtualKeyCode::Return => "Enter",
+        _ => ""
+    }
+}
+
 pub fn key_from_str(str: &str) -> Option<VirtualKeyCode> {
     //Only keys that we wanna support within the engine
     //Dont add others just to make sure lua doesn't have full access
@@ -55,6 +105,7 @@ pub fn key_from_str(str: &str) -> Option<VirtualKeyCode> {
         "Back" => Some(VirtualKeyCode::Back),
         "Enter" => Some(VirtualKeyCode::Return),
         "Space" => Some(VirtualKeyCode::Space),
+        "Period" => Some(VirtualKeyCode::Period),
         _ => None,
     }
 }
