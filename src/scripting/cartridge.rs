@@ -58,8 +58,8 @@ impl Default for Cartridge {
     }
 }
 
-pub fn make_cart(bytes: &Vec<u8>) -> Result<Cartridge, Box<dyn Error>> {
-    let mut decoder = GzDecoder::new(&bytes[..]);
+pub fn make_cart(bytes: &[u8]) -> Result<Cartridge, Box<dyn Error>> {
+    let mut decoder = GzDecoder::new(bytes);
     let mut decompressed = Vec::new();
     decoder.read_to_end(&mut decompressed)?;
     let (cart, _) = bincode::decode_from_slice(&decompressed, standard())?;

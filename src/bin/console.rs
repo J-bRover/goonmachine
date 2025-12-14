@@ -1,17 +1,17 @@
 use pixels::{Pixels, SurfaceTexture};
-use winit::{
-    dpi::LogicalSize,
-    event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
-};
-use std::io::{Read, Seek, SeekFrom};
 use rico_32::{
     engine::{
         game::GameEngine,
         rico::{bind_keyboard, bind_mouse_input, bind_mouse_move, handle_engine_update},
     },
-    scripting::cartridge::{make_cart, Cartridge}
+    scripting::cartridge::{make_cart, Cartridge},
+};
+use std::io::{Read, Seek, SeekFrom};
+use winit::{
+    dpi::LogicalSize,
+    event::{Event, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::WindowBuilder,
 };
 
 fn load_embedded_cart() -> Option<Cartridge> {
@@ -34,7 +34,6 @@ fn load_embedded_cart() -> Option<Cartridge> {
     let cart = make_cart(&cart).expect("Could not find cart in exe");
     Some(cart)
 }
-
 
 pub const SCREEN_SIZE: usize = 128;
 pub const SCALE: usize = 4;

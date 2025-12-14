@@ -67,7 +67,7 @@ impl TerminalEngine {
     fn parse_command(&mut self, cmd: &str) -> Result<Commands, Box<dyn Error>> {
         let tokens: Vec<String> = cmd.split_ascii_whitespace().map(|x| x.to_lowercase()).collect();
 
-        match tokens.get(0).ok_or("Not a valid command")?.as_str() {
+        match tokens.first().ok_or("Not a valid command")?.as_str() {
             "load" => {
                 let file = tokens.get(1).ok_or("Must pass in a file")?;
                 if !file.ends_with(".r32") && !file.ends_with(".r32.txt") {

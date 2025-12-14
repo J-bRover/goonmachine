@@ -1,6 +1,11 @@
 use rayon::prelude::*;
 use std::{
-    error::Error, fs, io::Write, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}
+    error::Error,
+    fs,
+    io::Write,
+    path::Path,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
 
 use notify::RecursiveMode;
@@ -21,7 +26,9 @@ use crate::{
     input::{keyboard::Keyboard, mouse::MousePress},
     render::colors::Colors,
     scripting::{
-        cartridge::{decode, get_cart, load_cartridge, update_scripts, write_cart, Cartridge, PATH},
+        cartridge::{
+            decode, get_cart, load_cartridge, update_scripts, write_cart, Cartridge, PATH,
+        },
         lua::LogTypes,
     },
 };
@@ -55,9 +62,9 @@ pub trait ScreenEngine {
 
 // Make sure to box new engines, just more efficient to just store a pointer
 enum StateEngines {
-    GameEngine(Box<GameEngine>),
-    SpriteEngine(Box<SpriteEngine>),
-    TerminalEngine(Box<TerminalEngine>),
+    Game(Box<GameEngine>),
+    Sprite(Box<SpriteEngine>),
+    Terminal(Box<TerminalEngine>),
 }
 
 /* Add bindings for diff engines in this struct in the vector
@@ -147,13 +154,13 @@ impl RicoEngine {
         if self.state_engines.is_empty() {
             let term_eng = TerminalEngine::default();
             self.state_engines = vec![
-                StateEngines::GameEngine(Box::new(game_eng)),
-                StateEngines::SpriteEngine(Box::new(sprite_eng)),
-                StateEngines::TerminalEngine(Box::new(term_eng)),
+                StateEngines::Game(Box::new(game_eng)),
+                StateEngines::Sprite(Box::new(sprite_eng)),
+                StateEngines::Terminal(Box::new(term_eng)),
             ];
         } else {
-            self.state_engines[0] = StateEngines::GameEngine(Box::new(game_eng));
-            self.state_engines[1] = StateEngines::SpriteEngine(Box::new(sprite_eng));
+            self.state_engines[0] = StateEngines::Game(Box::new(game_eng));
+            self.state_engines[1] = StateEngines::Sprite(Box::new(sprite_eng));
         }
         *self.cart_path.lock().unwrap() = path;
     }
@@ -199,14 +206,14 @@ impl RicoEngine {
                         if let Some(keycode) = input.virtual_keycode {
                             //Use match for finding which engine we're using rn
                             match self.state_engines[self.nav_engine.selected] {
-                                StateEngines::GameEngine(ref mut eng) => {
+                                StateEngines::Game(ref mut eng) => {
                                     let mut lua_api = eng.lua_api.borrow_mut();
                                     bind_keyboard(&mut lua_api.keyboard, input.state, keycode);
                                 }
-                                StateEngines::SpriteEngine(ref mut eng) => {
+                                StateEngines::Sprite(ref mut eng) => {
                                     bind_keyboard(&mut eng.keyboard, input.state, keycode);
                                 }
-                                StateEngines::TerminalEngine(ref mut eng) => {
+                                StateEngines::Terminal(ref mut eng) => {
                                     bind_keyboard(&mut eng.keyboard, input.state, keycode);
                                 }
                             }
@@ -221,7 +228,7 @@ impl RicoEngine {
                     WindowEvent::MouseWheel { delta, .. } => {
                         //If let cause we only need scroll wheels for sprite rn, switch to match
                         //later
-                        if let StateEngines::SpriteEngine(ref mut eng) =
+                        if let StateEngines::Sprite(ref mut eng) =
                             self.state_engines[self.nav_engine.selected]
                         {
                             let scroll_y = match delta {
@@ -236,7 +243,7 @@ impl RicoEngine {
                     WindowEvent::MouseInput { button, state, .. } => {
                         bind_mouse_input(&mut self.nav_engine.mouse, button, state);
                         match self.state_engines[self.nav_engine.selected] {
-                            StateEngines::GameEngine(ref mut eng) => {
+                            StateEngines::Game(ref mut eng) => {
                                 //Make these binding functions if we need more input
                                 bind_mouse_input(
                                     &mut eng.lua_api.borrow_mut().mouse,
@@ -245,10 +252,10 @@ impl RicoEngine {
                                 );
                                 bind_mouse_input(&mut eng.console_engine.mouse, button, state);
                             }
-                            StateEngines::SpriteEngine(ref mut eng) => {
+                            StateEngines::Sprite(ref mut eng) => {
                                 bind_mouse_input(&mut eng.mouse, button, state);
                             }
-                            StateEngines::TerminalEngine(_) => {}
+                            StateEngines::Terminal(_) => {}
                         };
                     }
 
@@ -267,7 +274,7 @@ impl RicoEngine {
                             NAV_BAR_HEIGHT * SCALE,
                         );
                         match self.state_engines[self.nav_engine.selected] {
-                            StateEngines::GameEngine(ref mut eng) => {
+                            StateEngines::Game(ref mut eng) => {
                                 bind_mouse_move(
                                     &mut eng.lua_api.borrow_mut().mouse,
                                     logical,
@@ -285,7 +292,7 @@ impl RicoEngine {
                                     WINDOW_WIDTH,
                                 );
                             }
-                            StateEngines::SpriteEngine(ref mut eng) => {
+                            StateEngines::Sprite(ref mut eng) => {
                                 bind_mouse_move(
                                     &mut eng.mouse,
                                     logical,
@@ -295,7 +302,7 @@ impl RicoEngine {
                                     WINDOW_WIDTH * 2,
                                 );
                             }
-                            StateEngines::TerminalEngine(_) => {}
+                            StateEngines::Terminal(_) => {}
                         }
                     }
 
@@ -315,7 +322,7 @@ impl RicoEngine {
 
         let mut to_be_loaded: Option<String> = None;
         match engine {
-            StateEngines::GameEngine(eng) => {
+            StateEngines::Game(eng) => {
                 if self.nav_engine.just_switched {
                     eng.console_engine.last_time = Instant::now();
                 }
@@ -339,11 +346,11 @@ impl RicoEngine {
                     **eng = game_eng;
                 }
             }
-            StateEngines::SpriteEngine(eng) => {
+            StateEngines::Sprite(eng) => {
                 eng.update();
                 handle_engine_update(buffer, &mut **eng, 0, NAV_BAR_HEIGHT * SCALE);
             }
-            StateEngines::TerminalEngine(eng) => {
+            StateEngines::Terminal(eng) => {
                 eng.update();
 
                 for command in eng.commands.clone() {
@@ -354,7 +361,7 @@ impl RicoEngine {
                         Commands::Save(file) => match get_cart(&self.cart_path.lock().unwrap()) {
                             Ok(cart) => match write_cart(&file, &cart) {
                                 Ok(_) => eng.add_log(LogTypes::Ok(
-                                        format!("Successfully saved cartridge to {file}").to_string(),
+                                    format!("Successfully saved cartridge to {file}").to_string(),
                                 )),
                                 Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
                             },
@@ -380,7 +387,9 @@ impl RicoEngine {
                             })();
                             match result {
                                 Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
-                                Ok(_) => eng.add_log(LogTypes::Ok(format!("Successfully exported to {file}").to_string())),
+                                Ok(_) => eng.add_log(LogTypes::Ok(
+                                    format!("Successfully exported to {file}").to_string(),
+                                )),
                             }
                         }
                     }
@@ -394,14 +403,14 @@ impl RicoEngine {
             match load_cartridge(&file) {
                 Ok(cart) => {
                     self.load(cart, file.clone());
-                    if let StateEngines::TerminalEngine(ref mut eng) = self.state_engines[2] {
+                    if let StateEngines::Terminal(ref mut eng) = self.state_engines[2] {
                         eng.add_log(LogTypes::Ok(
                             format!("Successfully loaded cartridge from {file}").to_string(),
                         ));
                     }
                 }
                 Err(err) => {
-                    if let StateEngines::TerminalEngine(ref mut eng) = self.state_engines[2] {
+                    if let StateEngines::Terminal(ref mut eng) = self.state_engines[2] {
                         eng.add_log(LogTypes::Err(err.to_string()));
                     }
                 }
