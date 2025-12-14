@@ -33,17 +33,7 @@ use crate::{
     },
 };
 
-const ICON_BYTES: &[u8] = include_bytes!("../../assets/logo.png");
-
-#[cfg(target_os = "linux")]
-fn runtime_bytes() -> Result<&'static [u8], Box<dyn Error>> {
-    Ok(include_bytes!("../../runtime/linux"))
-}
-
-#[cfg(target_os = "windows")]
-fn runtime_bytes() -> Result<&'static [u8], Box<dyn Error>> {
-    Ok(include_bytes!("../../runtime/windows.exe"))
-}
+pub const ICON_BYTES: &[u8] = include_bytes!("../../assets/logo.png");
 
 #[cfg(target_os = "linux")]
 fn add_ext(mut file: String) -> String {
@@ -439,14 +429,14 @@ impl RicoEngine {
                             let file = add_ext(file);
                             let f_clone = file.clone();
                             let result = (|| -> Result<(), Box<dyn Error>> {
-                                let runtime = runtime_bytes()?;
+                                let exe = fs::read(std::env::current_exe()?)?;
                                 let path = self.cart_path.lock().unwrap().clone();
                                 let mut cart = fs::read(&path)?;
                                 if path.ends_with(".r32.txt") {
                                     cart = decode(&cart)
                                 };
                                 let mut out = fs::File::create(f_clone)?;
-                                out.write_all(runtime)?;
+                                out.write_all(&exe)?;
                                 out.write_all(&cart)?;
 
                                 out.write_all(b"R32X")?;

@@ -1,4 +1,5 @@
 pub mod console;
+pub mod standalone;
 pub mod game;
 pub mod nav_bar;
 pub mod rico;
