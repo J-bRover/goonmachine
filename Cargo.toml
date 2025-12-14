@@ -7,7 +7,7 @@ license = "MIT"
 repository = "https://github.com/RICO-32/RICO-32"
 default-run = "rico-32"
 
-[build-dependencies]
+[target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
 
 [dependencies]
