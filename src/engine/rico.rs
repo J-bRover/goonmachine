@@ -89,7 +89,6 @@ fn watch_folder(path: Arc<Mutex<String>>) -> Result<(), Box<dyn Error>> {
     for result in rx {
         match result {
             Ok(events) => {
-                dbg!(&events);
                 let should_update = events.iter().any(|e| {
                     e.kind == DebouncedEventKind::Any
                         && e.path.extension().and_then(|s| s.to_str()) == Some("lua")
@@ -355,13 +354,37 @@ impl RicoEngine {
 
                 for command in eng.commands.clone() {
                     match command {
+                        Commands::Help(cmd) => {
+                            let cmd = cmd.as_deref();
+                            match cmd {
+                                Some("load") => {
+                                    eng.add_log(LogTypes::Ok("Loads the .r32 or .r32.txt (base64 version) cartridge into memory for editing.".to_string()));
+                                    eng.add_log(LogTypes::Ok("Usage: load <filename>".to_string()));
+                                },
+                                Some("save") => {
+                                    eng.add_log(LogTypes::Ok("Saves the currently loaded cartridge into a .r32 or .r32.txt (base64 version) file. Converts type automatically.".to_string()));
+                                    eng.add_log(LogTypes::Ok("Usage: save <filename>".to_string()));
+                                },
+                                Some("export") => {
+                                    eng.add_log(LogTypes::Ok("Automatically exports a standalone executable of a game of the current cartridge loaded. Will automatically export to the current operating systems format.".to_string()));
+                                    eng.add_log(LogTypes::Ok("Usage: export <filename>".to_string()));
+                                },
+                                None => {
+                                    eng.add_log(LogTypes::Ok("load: loads cartridge into console memory".to_string()));
+                                    eng.add_log(LogTypes::Ok("save: saves current cartridge to any file".to_string()));
+                                    eng.add_log(LogTypes::Ok("export: exports cartridge to a standalone executable".to_string()));
+                                    eng.add_log(LogTypes::Ok("see help <cmd> for more information.".to_string()));
+                                },
+                                Some(c) => eng.add_log(LogTypes::Err(format!("{c} is not a valid command").to_string())),
+                            }
+                        },
                         Commands::Load(file) => {
                             to_be_loaded = Some(file);
                         }
                         Commands::Save(file) => match get_cart(&self.cart_path.lock().unwrap()) {
                             Ok(cart) => match write_cart(&file, &cart) {
                                 Ok(_) => eng.add_log(LogTypes::Ok(
-                                    format!("Successfully saved cartridge to {file}").to_string(),
+                                        format!("Successfully saved cartridge to {file}").to_string(),
                                 )),
                                 Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
                             },

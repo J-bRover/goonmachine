@@ -1,6 +1,7 @@
 use std::{error::Error, time::Instant};
 
 use macro_procs::ScreenEngine;
+use winit::event::VirtualKeyCode;
 
 use crate::{
     engine::rico::{PixelsType, ScreenEngine, SCREEN_SIZE},
@@ -17,6 +18,7 @@ const TERMINAL_FRAME_RATE: i32 = 30;
 
 #[derive(Clone)]
 pub enum Commands {
+    Help(Option<String>),
     Load(String),
     Save(String),
     Export(String),
@@ -65,9 +67,19 @@ impl TerminalEngine {
     }
 
     fn parse_command(&mut self, cmd: &str) -> Result<Commands, Box<dyn Error>> {
-        let tokens: Vec<String> = cmd.split_ascii_whitespace().map(|x| x.to_lowercase()).collect();
+        let tokens: Vec<&str> = cmd.split_ascii_whitespace().collect();
 
-        match tokens.first().ok_or("Not a valid command")?.as_str() {
+        match tokens.first().ok_or("Not a valid command")?.to_lowercase().as_str() {
+            "help" => {
+                match tokens.get(1) {
+                    Some(cmd) => {
+                        Ok(Commands::Help(Some(cmd.to_string().to_lowercase())))
+                    },
+                    None => {
+                        Ok(Commands::Help(None))
+                    }
+                }
+            }
             "load" => {
                 let file = tokens.get(1).ok_or("Must pass in a file")?;
                 if !file.ends_with(".r32") && !file.ends_with(".r32.txt") {
@@ -98,40 +110,45 @@ impl TerminalEngine {
 
         self.commands.clear();
 
-        if !self.keyboard.keys_just_pressed.is_empty() {
-            for key in self.keyboard.keys_just_pressed.clone() {
-                match str_from_key(&key) {
-                    "" | "Up" | "Down" => continue,
-                    "Right" => self.cursor = (self.cursor + 1).min(self.input.len()),
-                    "Left" => {
-                        if self.cursor != 0 {
-                            self.cursor -= 1;
-                        }
+        for key in self.keyboard.keys_just_pressed.clone() {
+            match key {
+                VirtualKeyCode::Up | VirtualKeyCode::Down => continue,
+                VirtualKeyCode::Right => self.cursor = (self.cursor + 1).min(self.input.len()),
+                VirtualKeyCode::Left => {
+                    if self.cursor != 0 {
+                        self.cursor -= 1;
                     }
-                    "Back" => {
-                        if self.cursor != 0 {
-                            self.input.remove(self.cursor - 1);
-                            self.cursor -= 1;
-                        }
+                }
+                VirtualKeyCode::Back => {
+                    if self.cursor != 0 {
+                        self.input.remove(self.cursor - 1);
+                        self.cursor -= 1;
                     }
-                    "Enter" => {
-                        let cmd = self.input.clone();
-                        self.add_log(LogTypes::Ok(">".to_string() + &cmd));
+                }
+                VirtualKeyCode::Return => {
+                    let cmd = self.input.clone();
+                    self.add_log(LogTypes::Ok(">".to_string() + &cmd));
 
-                        match self.parse_command(&cmd) {
-                            Ok(cmd) => self.commands.push(cmd),
-                            Err(err) => self.add_log(LogTypes::Err(err.to_string())),
-                        }
+                    match self.parse_command(&cmd) {
+                        Ok(cmd) => self.commands.push(cmd),
+                        Err(err) => self.add_log(LogTypes::Err(err.to_string())),
+                    }
 
-                        self.input.clear();
-                        self.cursor = 0;
+                    self.input.clear();
+                    self.cursor = 0;
+                }
+                other => {
+                    let mut letter = str_from_key(&other).to_lowercase();
+                    if letter.len() != 1 { continue; };
+
+                    if self.keyboard.keys_pressed.contains(&VirtualKeyCode::LShift) || self.keyboard.keys_pressed.contains(&VirtualKeyCode::RShift) {
+                        letter = letter.to_uppercase();
                     }
-                    other => {
-                        self.input.insert_str(self.cursor, other);
-                        self.cursor += 1;
-                    }
-                };
-            }
+
+                    self.input.insert_str(self.cursor, &letter);
+                    self.cursor += 1;
+                }
+            };
         }
 
         for (i, log) in self.logs[self.logs.len().saturating_sub(38)..].iter().enumerate() {
