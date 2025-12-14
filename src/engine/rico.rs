@@ -1,9 +1,6 @@
 use rayon::prelude::*;
 use std::{
-    error::Error,
-    path::Path,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    error::Error, fs, io::Write, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}
 };
 
 use notify::RecursiveMode;
@@ -24,10 +21,20 @@ use crate::{
     input::{keyboard::Keyboard, mouse::MousePress},
     render::colors::Colors,
     scripting::{
-        cartridge::{get_cart, load_cartridge, update_scripts, write_cart, Cartridge, PATH},
+        cartridge::{decode, get_cart, load_cartridge, update_scripts, write_cart, Cartridge, PATH},
         lua::LogTypes,
     },
 };
+
+#[cfg(target_os = "linux")]
+static LINUX_RUNTIME: &[u8] = include_bytes!("../../runtime/linux");
+
+fn runtime_bytes() -> &'static [u8] {
+    match std::env::consts::OS {
+        "linux" => LINUX_RUNTIME,
+        _ => panic!("Unsupported OS"),
+    }
+}
 
 pub const SCREEN_SIZE: usize = 128;
 pub const SCALE: usize = 4;
@@ -107,21 +114,29 @@ impl RicoEngine {
             cart_path,
         };
 
-        std::thread::spawn(|| match watch_folder(path_clone) {
-            Ok(_) => println!("Watcher exited normally"),
-            Err(e) => println!("Watcher error: {:?}", e),
-        });
-
         let p = eng.cart_path.lock().unwrap().to_string().clone();
         let cart = match load_cartridge(&p) {
             Ok(cart) => cart,
             Err(_) => {
                 let cart = Cartridge::default();
                 let _ = write_cart(&p, &cart);
+                for (file, content) in &cart.scripts {
+                    let f_path = PATH.to_owned() + file;
+                    if let Some(parent) = Path::new(&f_path).parent() {
+                        fs::create_dir_all(parent).expect("Could not initialize r32/ directory");
+                    }
+
+                    fs::write(f_path, content).expect("Could not initialize r32/ directory");
+                }
                 cart
             }
         };
         eng.load(cart, p);
+
+        std::thread::spawn(|| match watch_folder(path_clone) {
+            Ok(_) => println!("Watcher exited normally"),
+            Err(e) => println!("Watcher error: {:?}", e),
+        });
 
         eng
     }
@@ -339,14 +354,34 @@ impl RicoEngine {
                         Commands::Save(file) => match get_cart(&self.cart_path.lock().unwrap()) {
                             Ok(cart) => match write_cart(&file, &cart) {
                                 Ok(_) => eng.add_log(LogTypes::Ok(
-                                    format!("Successfully saved cartridge to {file}").to_string(),
+                                        format!("Successfully saved cartridge to {file}").to_string(),
                                 )),
                                 Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
                             },
                             Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
                         },
                         Commands::Export(file) => {
-                            eng.add_log(LogTypes::Ok("Exporting not implemented".to_string()));
+                            let f_clone = file.clone();
+                            let result = (|| -> Result<(), Box<dyn Error>> {
+                                let runtime = runtime_bytes();
+                                let path = self.cart_path.lock().unwrap().clone();
+                                let mut cart = fs::read(&path)?;
+                                if path.ends_with(".r32.txt") {
+                                    cart = decode(&cart)
+                                };
+                                let mut out = fs::File::create(f_clone)?;
+                                out.write_all(runtime)?;
+                                out.write_all(&cart)?;
+
+                                out.write_all(b"R32X")?;
+                                out.write_all(&(1u32).to_le_bytes())?;
+                                out.write_all(&(cart.len() as u64).to_le_bytes())?;
+                                Ok(())
+                            })();
+                            match result {
+                                Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
+                                Ok(_) => eng.add_log(LogTypes::Ok(format!("Successfully exported to {file}").to_string())),
+                            }
                         }
                     }
                 }
@@ -371,7 +406,7 @@ impl RicoEngine {
                     }
                 }
             }
-        }
+        };
     }
 }
 

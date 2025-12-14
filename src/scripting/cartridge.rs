@@ -43,7 +43,7 @@ fn encode(input: &Vec<u8>) -> String {
     general_purpose::STANDARD.encode(input)
 }
 
-fn decode(input: &Vec<u8>) -> Vec<u8> {
+pub fn decode(input: &Vec<u8>) -> Vec<u8> {
     general_purpose::STANDARD.decode(input).expect("Could not decode")
 }
 
@@ -86,11 +86,8 @@ pub fn get_cart(bin_path: &str) -> Result<Cartridge, Box<dyn Error>> {
     if bin_path.ends_with(".r32.txt") {
         bytes = decode(&bytes)
     };
-    let mut decoder = GzDecoder::new(&bytes[..]);
-    let mut decompressed = Vec::new();
-    decoder.read_to_end(&mut decompressed)?;
-    let (cart, _) = bincode::decode_from_slice(&decompressed, standard())?;
 
+    let cart = make_cart(&bytes)?;
     Ok(cart)
 }
 

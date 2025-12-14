@@ -11,16 +11,16 @@ use rico_32::{
         game::GameEngine,
         rico::{bind_keyboard, bind_mouse_input, bind_mouse_move, handle_engine_update},
     },
-    scripting::cartridge::make_cart
+    scripting::cartridge::{make_cart, Cartridge}
 };
 
-fn load_embedded_cart() -> Option<Vec<u8>> {
+fn load_embedded_cart() -> Option<Cartridge> {
     let mut exe = std::fs::File::open(std::env::current_exe().ok()?).ok()?;
     let len = exe.metadata().ok()?.len();
     exe.seek(SeekFrom::Start(len - 16)).ok()?;
     let mut magic = [0u8; 4];
     exe.read_exact(&mut magic).ok()?;
-    if &magic != b"RCAR" {
+    if &magic != b"R32X" {
         return None;
     }
     let mut ver = [0u8; 4];
@@ -31,7 +31,7 @@ fn load_embedded_cart() -> Option<Vec<u8>> {
     exe.seek(SeekFrom::Start(len - 16 - cart_size)).ok()?;
     let mut cart = vec![0; cart_size as usize];
     exe.read_exact(&mut cart).ok()?;
-    let cart = make_cart(&cart);
+    let cart = make_cart(&cart).expect("Could not find cart in exe");
     Some(cart)
 }
 
@@ -50,7 +50,7 @@ fn main() {
         .build(&event_loop)
         .expect("Could not create RICO-32 window!");
 
-    let cart = load_embedded_cart();
+    let cart = load_embedded_cart().expect("Could not load cart");
 
     let mut eng = GameEngine::new(cart);
 
