@@ -33,14 +33,23 @@ use crate::{
     },
 };
 
-#[cfg(target_os = "linux")]
-static LINUX_RUNTIME: &[u8] = include_bytes!("../../runtime/linux");
 
 fn runtime_bytes() -> Result<&'static [u8], Box<dyn Error>> {
-    match std::env::consts::OS {
-        "linux" => Ok(LINUX_RUNTIME),
-        _ => Err("OS not supported".into())
+    #[cfg(target_os = "linux")]
+    {
+        static LINUX_RUNTIME: &[u8] =
+            include_bytes!("../../runtime/linux");
+        return Ok(LINUX_RUNTIME);
     }
+
+    #[cfg(target_os = "windows")]
+    {
+        static WINDOWS_RUNTIME: &[u8] =
+            include_bytes!("../../runtime/windows.exe");
+        return Ok(WINDOWS_RUNTIME);
+    }
+
+    Err("OS not supported".into())
 }
 
 pub const SCREEN_SIZE: usize = 128;
