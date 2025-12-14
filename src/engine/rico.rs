@@ -36,10 +36,10 @@ use crate::{
 #[cfg(target_os = "linux")]
 static LINUX_RUNTIME: &[u8] = include_bytes!("../../runtime/linux");
 
-fn runtime_bytes() -> &'static [u8] {
+fn runtime_bytes() -> Result<&'static [u8], Box<dyn Error>> {
     match std::env::consts::OS {
-        "linux" => LINUX_RUNTIME,
-        _ => panic!("Unsupported OS"),
+        "linux" => Ok(LINUX_RUNTIME),
+        _ => Err("OS not supported".into())
     }
 }
 
@@ -393,7 +393,7 @@ impl RicoEngine {
                         Commands::Export(file) => {
                             let f_clone = file.clone();
                             let result = (|| -> Result<(), Box<dyn Error>> {
-                                let runtime = runtime_bytes();
+                                let runtime = runtime_bytes()?;
                                 let path = self.cart_path.lock().unwrap().clone();
                                 let mut cart = fs::read(&path)?;
                                 if path.ends_with(".r32.txt") {
