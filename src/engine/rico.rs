@@ -33,23 +33,35 @@ use crate::{
     },
 };
 
-
+#[cfg(target_os = "linux")]
 fn runtime_bytes() -> Result<&'static [u8], Box<dyn Error>> {
-    #[cfg(target_os = "linux")]
-    {
-        static LINUX_RUNTIME: &[u8] =
-            include_bytes!("../../runtime/linux");
-        return Ok(LINUX_RUNTIME);
-    }
+    Ok(include_bytes!("../../runtime/linux"))
+}
 
-    #[cfg(target_os = "windows")]
-    {
-        static WINDOWS_RUNTIME: &[u8] =
-            include_bytes!("../../runtime/windows.exe");
-        return Ok(WINDOWS_RUNTIME);
-    }
+#[cfg(target_os = "windows")]
+fn runtime_bytes() -> Result<&'static [u8], Box<dyn Error>> {
+    Ok(include_bytes!("../../runtime/windows.exe"))
+}
 
-    Err("OS not supported".into())
+#[cfg(target_os = "linux")]
+fn add_ext(mut file: String) -> String {
+    if !file.ends_with(".linux") {
+        file.push_str(".linux");
+    }
+    file
+}
+
+#[cfg(target_os = "windows")]
+fn add_ext(mut file: String) -> String {
+    if !file.ends_with(".exe") {
+        file.push_str(".exe");
+    }
+    file
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+fn add_ext(mut file: String) -> String {
+    file
 }
 
 pub const SCREEN_SIZE: usize = 128;
@@ -369,37 +381,55 @@ impl RicoEngine {
                                 Some("load") => {
                                     eng.add_log(LogTypes::Ok("Loads the .r32 or .r32.txt (base64 version) cartridge into memory for editing.".to_string()));
                                     eng.add_log(LogTypes::Ok("Usage: load <filename>".to_string()));
-                                },
+                                }
                                 Some("save") => {
                                     eng.add_log(LogTypes::Ok("Saves the currently loaded cartridge into a .r32 or .r32.txt (base64 version) file. Converts type automatically.".to_string()));
                                     eng.add_log(LogTypes::Ok("Usage: save <filename>".to_string()));
-                                },
+                                }
                                 Some("export") => {
                                     eng.add_log(LogTypes::Ok("Automatically exports a standalone executable of a game of the current cartridge loaded. Will automatically export to the current operating systems format.".to_string()));
-                                    eng.add_log(LogTypes::Ok("Usage: export <filename>".to_string()));
-                                },
+                                    eng.add_log(LogTypes::Ok(
+                                        "There is currently only support for windows and linux."
+                                            .to_string(),
+                                    ));
+                                    eng.add_log(LogTypes::Ok(
+                                        "Usage: export <filename>".to_string(),
+                                    ));
+                                }
                                 None => {
-                                    eng.add_log(LogTypes::Ok("load: loads cartridge into console memory".to_string()));
-                                    eng.add_log(LogTypes::Ok("save: saves current cartridge to any file".to_string()));
-                                    eng.add_log(LogTypes::Ok("export: exports cartridge to a standalone executable".to_string()));
-                                    eng.add_log(LogTypes::Ok("see help <cmd> for more information.".to_string()));
-                                },
-                                Some(c) => eng.add_log(LogTypes::Err(format!("{c} is not a valid command").to_string())),
+                                    eng.add_log(LogTypes::Ok(
+                                        "load: loads cartridge into console memory".to_string(),
+                                    ));
+                                    eng.add_log(LogTypes::Ok(
+                                        "save: saves current cartridge to any file".to_string(),
+                                    ));
+                                    eng.add_log(LogTypes::Ok(
+                                        "export: exports cartridge to a standalone executable"
+                                            .to_string(),
+                                    ));
+                                    eng.add_log(LogTypes::Ok(
+                                        "see help <cmd> for more information.".to_string(),
+                                    ));
+                                }
+                                Some(c) => eng.add_log(LogTypes::Err(
+                                    format!("{c} is not a valid command").to_string(),
+                                )),
                             }
-                        },
+                        }
                         Commands::Load(file) => {
                             to_be_loaded = Some(file);
                         }
                         Commands::Save(file) => match get_cart(&self.cart_path.lock().unwrap()) {
                             Ok(cart) => match write_cart(&file, &cart) {
                                 Ok(_) => eng.add_log(LogTypes::Ok(
-                                        format!("Successfully saved cartridge to {file}").to_string(),
+                                    format!("Successfully saved cartridge to {file}").to_string(),
                                 )),
                                 Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
                             },
                             Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
                         },
                         Commands::Export(file) => {
+                            let file = add_ext(file);
                             let f_clone = file.clone();
                             let result = (|| -> Result<(), Box<dyn Error>> {
                                 let runtime = runtime_bytes()?;

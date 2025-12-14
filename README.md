@@ -25,6 +25,7 @@ A fantasy console inspired by PICO-8, built with Rust for performance and Lua fo
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Sprite Engine](#sprite-engine)
+- [Terminal Engine](#terminal-engine)
 - [Cartridge & Lua Files](#cartridge--lua-files)
 - [API Reference](#api-reference)
 - [Examples](#examples)
@@ -42,14 +43,15 @@ The console is designed to be simple yet powerful, allowing developers to create
 
 - **128×128 Pixel Display**: Classic retro resolution with 4× pixel scaling for modern displays
 - **16-Color Palette**: Predefined color palette for consistent retro aesthetics
-- **Lua Scripting**: Full Lua 5.4 support with custom module system
+- **Lua Scripting**: Full Lua 5.4 support with custom module system. Only safe Lua features are enabled, allowing for security when running external cartridges.
 - **Built-in Console**: Integrated console engine for logging and debugging
 - **Sprite Support**: Create custom 32x32 sprites within the console and use and load them in the game
 - **Input Handling**: Mouse and keyboard input with frame-accurate state tracking
 - **Frame Rate Control**: Configurable frame rate with delta time support
 - **Modular Architecture**: Clean separation between game engine, console engine, and scripting
-- **Hot Reload Support**: Restart functionality for rapid iteration
-- **Full cartridge support**: .r32 files are cartridges that can be shared with other users. RICO-32 will auto-load main.r32 from the root directory, so make sure to have the main cartridge there.
+- **In Memory Reload Support**: Restart functionality for rapid iteration and smooth development.
+- **Full cartridge support**: .r32 files are cartridges that can be shared with other users. RICO-32 will make a main.r32 if one doesn't already exist on startup but any cartridge can be loaded and saved to from the inbuilt terminal.
+- **Full inbuilt terminal**: Contains commands to load cartridges, save cartridges to different formats, and export standalone executables.
 
 ## Screenshots
 
@@ -102,13 +104,9 @@ The console is designed to be simple yet powerful, allowing developers to create
    
 3. **Build the game**: Use the sprite engine to create and edit sprites and the console to debug your game.
 
-4. Running just the game without the debugging and editor features can be done by running. The main.r32 cartridge will be used.
+4. Building a final standalone executable for your game can be done by running the following in the inbuilt terminal.
 ```bash
-cargo run --release --bin console
-```
-The following can be added in order to run the console as a standalone exe without any need for on-disk file cartridge storage. The base64 string can be generated using commands described in [Cartridge & Lua Files](#cartridge--lua-files).
-```bash
-cargo run --release --bin console -- --with-cart=<full_base64_string>
+export <filename>
 ```
 
 ### Example Game
@@ -138,7 +136,6 @@ RICO-32 includes a built-in sprite editor for creating and managing 32×32 pixel
 
 - **32×32 Sprite Canvas**: Edit sprites pixel-by-pixel with a 3× zoomed preview
 - **60-Sprite Sheet**: Store up to 60 sprites (expandable) in a persistent sprite sheet
-     - Sprite sheet is stored in assets/sheet.sprt for persistency
      - RICO-32 features an inbuilt sprite file spec to store and read the sprite sheet for the engine
 - **Drawing Tools**:
   - **Pencil**: Draw individual pixels with the selected color
@@ -186,6 +183,16 @@ function update(dt)
     rico:draw(80, 48, 5)
 end
 ```
+## Terminal Engine
+
+## Features
+- RICO-32 features an inbuilt terminal to perform essential RICO-related commands.
+
+### Commands 
+- load <filepath>: Loads a cartridge into memory, can be a normal .r32 cartridge or a base 64 version stored as .r32.txt.
+- save <filepath>: Saves the current loaded cartridge to a file on disk, can be a normal .r32 cartridge or a base 64 version stored as .r32.txt.
+- export <filepath>: Exports the current loaded cartridge as a standalone executable for the current operating system. There is currently only support for linux and windows.
+- help [cmd]: prints out a list of commands what they do. If a command is specified, gives details on how to use that command and a bit more info about it.
 
 ## Cartridge & Lua Files
 
@@ -194,12 +201,11 @@ end
 - RICO-32 automatically watches the r32/ folder for any changes made through any IDE and auto recompiles the cartridge to be instantly loaded whenever the game is restarted through restarting the whole engine or the inbuilt game restart.
 - Sprites are **never written to r32/**, remaining fully in memory and the cartridge, and must be saved to the cartridge using the checkmark within the sprite editor.
 - Cartridges fully contain all information related to all RICO-32 games, and thus RICO-32 games can be shared easily by sharing .r32 files or using their Base64 version.
-- Cartridges can be encoded and decoded into base64 for easy sharing using the following commands.
-  ```bash
-  cargo run --release --bin cart encode <cartridge_file_path>
-  cargo run --release --bin cart decode <full_base64_string> 
-  ```
-  The encoded string will be pasted into the console for easy access and the decoded .r32 cartridge will be stored in main.r32 automatically for easy usage through the normal RICO-32 and game-only view.
+- To convert the formats of your cartridges from .r32 to .r32.txt (the base64 version), simply load whichever format from the inbuilt terminal and then save it back to whichever format.
+```bash
+load cart.r32
+save b64.r32.txt
+```
 
 ### Note: all changes made to the r32/ directory while RICO-32 is not running will be discarded and overwritten with the cartridge upon initial RICO-32 startup.
 
@@ -316,7 +322,10 @@ The project includes several example games in the `examples/` directory:
 - **Shooter**: A top-down shooter example
 - **Tetris**: Classic Tetris implementation
 
-To run an example, simply copy the example.r32 to file the root as main.r32.
+To run an example, simply run the following in the inbuilt terminal.
+```bash
+load <filepath>
+```
 
 ## Contributing
 
@@ -353,7 +362,6 @@ Copyright (c) 2025 Dhruv Goel
   - Integrated asset browser
   - Debugging tools and breakpoints
   - Performance profiler
-  - Visual sprite editor
 
 ### Future Enhancements
 

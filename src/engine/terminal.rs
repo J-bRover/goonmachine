@@ -70,16 +70,10 @@ impl TerminalEngine {
         let tokens: Vec<&str> = cmd.split_ascii_whitespace().collect();
 
         match tokens.first().ok_or("Not a valid command")?.to_lowercase().as_str() {
-            "help" => {
-                match tokens.get(1) {
-                    Some(cmd) => {
-                        Ok(Commands::Help(Some(cmd.to_string().to_lowercase())))
-                    },
-                    None => {
-                        Ok(Commands::Help(None))
-                    }
-                }
-            }
+            "help" => match tokens.get(1) {
+                Some(cmd) => Ok(Commands::Help(Some(cmd.to_string().to_lowercase()))),
+                None => Ok(Commands::Help(None)),
+            },
             "load" => {
                 let file = tokens.get(1).ok_or("Must pass in a file")?;
                 if !file.ends_with(".r32") && !file.ends_with(".r32.txt") {
@@ -139,9 +133,13 @@ impl TerminalEngine {
                 }
                 other => {
                     let mut letter = str_from_key(&other).to_lowercase();
-                    if letter.len() != 1 { continue; };
+                    if letter.len() != 1 {
+                        continue;
+                    };
 
-                    if self.keyboard.keys_pressed.contains(&VirtualKeyCode::LShift) || self.keyboard.keys_pressed.contains(&VirtualKeyCode::RShift) {
+                    if self.keyboard.keys_pressed.contains(&VirtualKeyCode::LShift)
+                        || self.keyboard.keys_pressed.contains(&VirtualKeyCode::RShift)
+                    {
                         letter = letter.to_uppercase();
                     }
 
