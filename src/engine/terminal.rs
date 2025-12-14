@@ -4,12 +4,13 @@ use macro_procs::ScreenEngine;
 
 use crate::{
     engine::rico::{PixelsType, ScreenEngine, SCREEN_SIZE},
-    input::{keyboard::{str_from_key, Keyboard}},
+    input::keyboard::{str_from_key, Keyboard},
     render::{
         colors::Colors,
         pixels::{clear, print_scr_mid, rect_fill},
     },
-    scripting::lua::LogTypes, time::sync,
+    scripting::lua::LogTypes,
+    time::sync,
 };
 
 const TERMINAL_FRAME_RATE: i32 = 30;
@@ -18,7 +19,7 @@ const TERMINAL_FRAME_RATE: i32 = 30;
 pub enum Commands {
     Load(String),
     Save(String),
-    Export(String)
+    Export(String),
 }
 
 #[derive(ScreenEngine)]
@@ -43,7 +44,7 @@ impl Default for TerminalEngine {
             input: String::new(),
             cursor: 0,
             frame_hash: 0,
-            keyboard: Keyboard::default()
+            keyboard: Keyboard::default(),
         }
     }
 }
@@ -73,19 +74,19 @@ impl TerminalEngine {
                     return Err("Must pass in a .r32 or .r32.txt cartridge to load".into());
                 }
                 Ok(Commands::Load(file.to_string()))
-            },
+            }
             "save" => {
                 let file = tokens.get(1).ok_or("Must pass in a file")?;
                 if !file.ends_with(".r32") && !file.ends_with(".r32.txt") {
                     return Err("Must pass in a .r32 or .r32.txt cartridge to save to".into());
                 }
                 Ok(Commands::Save(file.to_string()))
-            },
+            }
             "export" => {
                 let file = tokens.get(1).ok_or("Must pass in file name to export to")?;
                 Ok(Commands::Export(file.to_string()))
-            },
-            _ => Err("Not a valid command".into())
+            }
+            _ => Err("Not a valid command".into()),
         }
     }
 
@@ -101,20 +102,18 @@ impl TerminalEngine {
             for key in self.keyboard.keys_just_pressed.clone() {
                 match str_from_key(&key) {
                     "" | "Up" | "Down" => continue,
-                    "Right" => {
-                        self.cursor = (self.cursor + 1).min(self.input.len())
-                    },
+                    "Right" => self.cursor = (self.cursor + 1).min(self.input.len()),
                     "Left" => {
                         if self.cursor != 0 {
                             self.cursor -= 1;
                         }
-                    },
+                    }
                     "Back" => {
                         if self.cursor != 0 {
                             self.input.remove(self.cursor - 1);
                             self.cursor -= 1;
                         }
-                    },
+                    }
                     "Enter" => {
                         let cmd = self.input.clone();
                         self.add_log(LogTypes::Ok(">".to_string() + &cmd));
@@ -126,7 +125,7 @@ impl TerminalEngine {
 
                         self.input.clear();
                         self.cursor = 0;
-                    },
+                    }
                     other => {
                         self.input.insert_str(self.cursor, other);
                         self.cursor += 1;
@@ -143,8 +142,21 @@ impl TerminalEngine {
             print_scr_mid(&mut self.pixels, 1, 6 * i as i32 + 20, col, log.to_string());
         }
         if self.frame_hash > 10 {
-            rect_fill(&mut self.pixels, 1 + 4 * self.cursor as i32, SCREEN_SIZE as i32 * 2 - 6, 1, 5, Colors::White);
+            rect_fill(
+                &mut self.pixels,
+                1 + 4 * self.cursor as i32,
+                SCREEN_SIZE as i32 * 2 - 6,
+                1,
+                5,
+                Colors::White,
+            );
         }
-        print_scr_mid(&mut self.pixels, 1, SCREEN_SIZE as i32 * 2 - 6, Colors::Black, self.input.to_string());
+        print_scr_mid(
+            &mut self.pixels,
+            1,
+            SCREEN_SIZE as i32 * 2 - 6,
+            Colors::Black,
+            self.input.to_string(),
+        );
     }
 }

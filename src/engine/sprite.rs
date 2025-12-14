@@ -1,6 +1,4 @@
-use std::{
-    time::Instant,
-};
+use std::time::Instant;
 
 use macro_procs::ScreenEngine;
 use winit::event::VirtualKeyCode;

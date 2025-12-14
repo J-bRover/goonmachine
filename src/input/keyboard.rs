@@ -10,7 +10,7 @@ pub struct Keyboard {
 
 pub fn str_from_key(keycode: &VirtualKeyCode) -> &str {
     match keycode {
-        VirtualKeyCode::Key1 => "1" ,
+        VirtualKeyCode::Key1 => "1",
         VirtualKeyCode::Key2 => "2",
         VirtualKeyCode::Key3 => "3",
         VirtualKeyCode::Key4 => "4",
@@ -56,7 +56,7 @@ pub fn str_from_key(keycode: &VirtualKeyCode) -> &str {
         VirtualKeyCode::Down => "Down",
         VirtualKeyCode::Back => "Back",
         VirtualKeyCode::Return => "Enter",
-        _ => ""
+        _ => "",
     }
 }
 

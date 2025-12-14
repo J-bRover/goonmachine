@@ -20,7 +20,13 @@ use winit::{
 
 use super::{game::GameEngine, nav_bar::NavEngine, sprite::SpriteEngine};
 use crate::{
-    engine::terminal::{Commands, TerminalEngine}, input::{keyboard::Keyboard, mouse::MousePress}, render::colors::Colors, scripting::{cartridge::{get_cart, load_cartridge, update_scripts, write_cart, Cartridge, PATH}, lua::LogTypes}
+    engine::terminal::{Commands, TerminalEngine},
+    input::{keyboard::Keyboard, mouse::MousePress},
+    render::colors::Colors,
+    scripting::{
+        cartridge::{get_cart, load_cartridge, update_scripts, write_cart, Cartridge, PATH},
+        lua::LogTypes,
+    },
 };
 
 pub const SCREEN_SIZE: usize = 128;
@@ -44,7 +50,7 @@ pub trait ScreenEngine {
 enum StateEngines {
     GameEngine(Box<GameEngine>),
     SpriteEngine(Box<SpriteEngine>),
-    TerminalEngine(Box<TerminalEngine>)
+    TerminalEngine(Box<TerminalEngine>),
 }
 
 /* Add bindings for diff engines in this struct in the vector
@@ -70,9 +76,10 @@ fn watch_folder(path: Arc<Mutex<String>>) -> Result<(), Box<dyn Error>> {
         match result {
             Ok(events) => {
                 dbg!(&events);
-                let should_update = events
-                    .iter()
-                    .any(|e| e.kind == DebouncedEventKind::Any && e.path.extension().and_then(|s| s.to_str()) == Some("lua"));
+                let should_update = events.iter().any(|e| {
+                    e.kind == DebouncedEventKind::Any
+                        && e.path.extension().and_then(|s| s.to_str()) == Some("lua")
+                });
 
                 if should_update {
                     let p = path.lock().expect("Couldn't resolve path").to_string();
@@ -91,7 +98,11 @@ impl RicoEngine {
         let cart_path = Arc::from(Mutex::from(path));
         let path_clone = cart_path.clone();
         let mut eng = RicoEngine {
-            nav_engine: NavEngine::new(vec!["Game".to_string(), "Sprite".to_string(), "Term".to_string()]),
+            nav_engine: NavEngine::new(vec![
+                "Game".to_string(),
+                "Sprite".to_string(),
+                "Term".to_string(),
+            ]),
             state_engines: Vec::new(),
             cart_path,
         };
@@ -179,7 +190,7 @@ impl RicoEngine {
                                 }
                                 StateEngines::SpriteEngine(ref mut eng) => {
                                     bind_keyboard(&mut eng.keyboard, input.state, keycode);
-                                },
+                                }
                                 StateEngines::TerminalEngine(ref mut eng) => {
                                     bind_keyboard(&mut eng.keyboard, input.state, keycode);
                                 }
@@ -221,7 +232,7 @@ impl RicoEngine {
                             }
                             StateEngines::SpriteEngine(ref mut eng) => {
                                 bind_mouse_input(&mut eng.mouse, button, state);
-                            },
+                            }
                             StateEngines::TerminalEngine(_) => {}
                         };
                     }
@@ -268,7 +279,7 @@ impl RicoEngine {
                                     WINDOW_WIDTH,
                                     WINDOW_WIDTH * 2,
                                 );
-                            },
+                            }
                             StateEngines::TerminalEngine(_) => {}
                         }
                     }
@@ -316,7 +327,7 @@ impl RicoEngine {
             StateEngines::SpriteEngine(eng) => {
                 eng.update();
                 handle_engine_update(buffer, &mut **eng, 0, NAV_BAR_HEIGHT * SCALE);
-            },
+            }
             StateEngines::TerminalEngine(eng) => {
                 eng.update();
 
@@ -324,21 +335,19 @@ impl RicoEngine {
                     match command {
                         Commands::Load(file) => {
                             to_be_loaded = Some(file);
-                        },
-                        Commands::Save(file) => {
-                            match get_cart(&self.cart_path.lock().unwrap()) {
-                                Ok(cart) => {
-                                    match write_cart(&file, &cart) {
-                                        Ok(_) => eng.add_log(LogTypes::Ok(format!("Successfully saved cartridge to {file}").to_string())),
-                                        Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
-                                    }
-                                },
+                        }
+                        Commands::Save(file) => match get_cart(&self.cart_path.lock().unwrap()) {
+                            Ok(cart) => match write_cart(&file, &cart) {
+                                Ok(_) => eng.add_log(LogTypes::Ok(
+                                    format!("Successfully saved cartridge to {file}").to_string(),
+                                )),
                                 Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
-                            }
+                            },
+                            Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
                         },
                         Commands::Export(file) => {
                             eng.add_log(LogTypes::Ok("Exporting not implemented".to_string()));
-                        },
+                        }
                     }
                 }
 
@@ -351,9 +360,11 @@ impl RicoEngine {
                 Ok(cart) => {
                     self.load(cart, file.clone());
                     if let StateEngines::TerminalEngine(ref mut eng) = self.state_engines[2] {
-                        eng.add_log(LogTypes::Ok(format!("Successfully loaded cartridge from {file}").to_string()));
+                        eng.add_log(LogTypes::Ok(
+                            format!("Successfully loaded cartridge from {file}").to_string(),
+                        ));
                     }
-                },
+                }
                 Err(err) => {
                     if let StateEngines::TerminalEngine(ref mut eng) = self.state_engines[2] {
                         eng.add_log(LogTypes::Err(err.to_string()));
