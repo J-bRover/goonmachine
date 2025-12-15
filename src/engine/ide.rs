@@ -30,44 +30,6 @@ struct Change {
     cursor_after: (usize, usize),
 }
 
-fn highlight_lua_line(line: &str) -> Vec<(String, Colors)> {
-    let mut result = Vec::new();
-    let mut remaining = line;
-
-    let comment_re = Regex::new(r"^--.*").unwrap();
-    let string_re = Regex::new(r#"^"[^"]*"|^'[^']*'"#).unwrap();
-    let keyword_re = Regex::new(r"^(local|function|end|if|then|else|elseif|for|while|do|repeat|until|return|break|and|or|not|in)\b").unwrap();
-    let number_re = Regex::new(r"^\d+\.?\d*").unwrap();
-    let operator_re = Regex::new(r"^[+\-*/%=<>~]+").unwrap();
-    let identifier_re = Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*").unwrap();
-
-    while !remaining.is_empty() {
-        if let Some(m) = comment_re.find(remaining) {
-            result.push((m.as_str().to_string(), Colors::Green));
-        } else if let Some(m) = string_re.find(remaining) {
-            result.push((m.as_str().to_string(), Colors::Orange));
-            remaining = &remaining[m.end()..];
-        } else if let Some(m) = keyword_re.find(remaining) {
-            result.push((m.as_str().to_string(), Colors::Blue));
-            remaining = &remaining[m.end()..];
-        } else if let Some(m) = number_re.find(remaining) {
-            result.push((m.as_str().to_string(), Colors::Yellow));
-            remaining = &remaining[m.end()..];
-        } else if let Some(m) = operator_re.find(remaining) {
-            result.push((m.as_str().to_string(), Colors::Teal));
-            remaining = &remaining[m.end()..];
-        } else if let Some(m) = identifier_re.find(remaining) {
-            result.push((m.as_str().to_string(), Colors::Silver));
-            remaining = &remaining[m.end()..];
-        } else {
-            result.push((remaining[0..1].to_string(), Colors::Silver));
-            remaining = &remaining[1..];
-        }
-    }
-
-    result
-}
-
 #[derive(ScreenEngine)]
 pub struct IDEEngine {
     pixels: PixelsType,
@@ -83,6 +45,8 @@ pub struct IDEEngine {
     redo_stack: Vec<Change>,
     clipboard: String,
     frame_hash: i32,
+
+    regexes: Vec<Regex>,
 }
 
 impl Default for IDEEngine {
@@ -102,6 +66,12 @@ impl Default for IDEEngine {
             "Enjoy coding!".to_string(),
         ];
 
+        let string_re = Regex::new(r#"^"[^"]*"|^'[^']*'"#).unwrap();
+        let keyword_re = Regex::new(r"^(local|function|end|if|then|else|elseif|for|while|do|repeat|until|return|break|and|or|not|in)\b").unwrap();
+        let number_re = Regex::new(r"^\d+\.?\d*").unwrap();
+        let operator_re = Regex::new(r"^[+\-*/%=<>~]+").unwrap();
+        let identifier_re = Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*").unwrap();
+
         IDEEngine {
             pixels: Colors::pixels(SCREEN_SIZE, SCREEN_SIZE * 2),
             last_time: Instant::now(),
@@ -114,13 +84,14 @@ impl Default for IDEEngine {
             redo_stack: Vec::new(),
             clipboard: String::new(),
             frame_hash: 0,
+            regexes: vec![string_re, keyword_re, number_re, operator_re, identifier_re],
         }
     }
 }
 
 impl IDEEngine {
     pub fn update(&mut self) {
-        self.frame_hash = (self.frame_hash + 1) % 20;
+        self.frame_hash = (self.frame_hash + 1) % 24;
         sync(&mut self.last_time, IDE_FRAME_RATE);
         clear(&mut self.pixels, Colors::Black);
 
@@ -157,7 +128,7 @@ impl IDEEngine {
 
         for (row_idx, line) in self.file.iter().enumerate().skip(self.scroll_offset.1) {
             let y = (row_idx - self.scroll_offset.1) as i32 * TEXT_HEIGHT + 1;
-            if y + TEXT_HEIGHT as i32 >= SCREEN_SIZE as i32 {
+            if y + TEXT_HEIGHT >= SCREEN_SIZE as i32 {
                 break;
             }
 
@@ -165,12 +136,12 @@ impl IDEEngine {
             let end_col = min(line.len(), self.scroll_offset.0 + visible_cols as usize);
             if start_col < end_col {
                 let line_to_render = &line[start_col..end_col];
-                let tokens = highlight_lua_line(line_to_render);
+                let tokens = self.highlight_lua_line(line_to_render);
 
                 let mut x = 1;
                 for (text, color) in tokens {
                     print_scr_mid(&mut self.pixels, x, y, color, text.clone());
-                    x += text.len() as i32 * TEXT_WIDTH; 
+                    x += text.len() as i32 * TEXT_WIDTH;
                 }
             }
         }
@@ -200,6 +171,38 @@ impl IDEEngine {
         }
     }
 
+    fn highlight_lua_line(&self, line: &str) -> Vec<(String, Colors)> {
+        let mut result = Vec::new();
+        let mut remaining = line;
+
+        while !remaining.is_empty() {
+            if remaining.starts_with("--") {
+                result.push((remaining.to_string(), Colors::Gray));
+                break;
+            }
+
+            let colors =
+                [Colors::Orange, Colors::Blue, Colors::Yellow, Colors::Teal, Colors::Silver];
+
+            let mut found = false;
+            for (i, regex) in self.regexes.iter().enumerate() {
+                if let Some(m) = regex.find(remaining) {
+                    result.push((m.as_str().to_string(), colors[i]));
+                    remaining = &remaining[m.end()..];
+                    found = true;
+                    break;
+                }
+            }
+
+            if !found {
+                result.push((remaining[0..1].to_string(), Colors::Silver));
+                remaining = &remaining[1..];
+            }
+        }
+
+        result
+    }
+
     fn handle_input(&mut self) {
         let shift = self.keyboard.keys_pressed.contains(&VirtualKeyCode::LShift)
             || self.keyboard.keys_pressed.contains(&VirtualKeyCode::RShift);
@@ -209,7 +212,7 @@ impl IDEEngine {
 
         let old_cursor = self.cursor;
 
-        for key in &keys_pressed{
+        for key in &keys_pressed {
             match key {
                 VirtualKeyCode::Left
                 | VirtualKeyCode::Right
@@ -223,10 +226,8 @@ impl IDEEngine {
 
         if self.frame_hash % 3 == 0 {
             self.handle_special_keys(&keys_pressed);
-        } else {
-            if self.handle_special_keys(&keys_just) {
-                self.frame_hash = 0;
-            };
+        } else if self.handle_special_keys(&keys_just) {
+            self.frame_hash = 0;
         }
 
         let ctrl = self.keyboard.keys_pressed.contains(&VirtualKeyCode::LControl)
@@ -234,10 +235,8 @@ impl IDEEngine {
         if ctrl {
             if self.frame_hash % 6 == 0 {
                 self.handle_shortcuts(&keys_pressed);
-            } else {
-                if self.handle_shortcuts(&keys_just){
-                    self.frame_hash = 0;
-                };
+            } else if self.handle_shortcuts(&keys_just) {
+                self.frame_hash = 0;
             }
         }
 
@@ -348,7 +347,9 @@ impl IDEEngine {
                     match_this = false;
                 }
             }
-            if match_this { matched = true };
+            if match_this {
+                matched = true
+            };
         }
 
         matched
@@ -417,9 +418,11 @@ impl IDEEngine {
                     this_matched = false;
                 }
             }
-            if this_matched { matched = true };
+            if this_matched {
+                matched = true
+            };
         }
-        
+
         matched
     }
 
@@ -559,8 +562,8 @@ impl IDEEngine {
     }
 
     fn scroll_to_cursor(&mut self) {
-        let visible_rows = SCREEN_SIZE as usize / TEXT_HEIGHT as usize;
-        let visible_cols = SCREEN_SIZE as usize / TEXT_WIDTH as usize;
+        let visible_rows = SCREEN_SIZE / TEXT_HEIGHT as usize;
+        let visible_cols = SCREEN_SIZE / TEXT_WIDTH as usize;
 
         if self.cursor.1 < self.scroll_offset.1 {
             self.scroll_offset.1 = self.cursor.1;

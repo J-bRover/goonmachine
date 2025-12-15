@@ -79,7 +79,7 @@ enum StateEngines {
     Game(Box<GameEngine>),
     Sprite(Box<SpriteEngine>),
     Terminal(Box<TerminalEngine>),
-    IDE(Box<IDEEngine>),
+    Ide(Box<IDEEngine>),
 }
 
 /* Add bindings for diff engines in this struct in the vector
@@ -172,13 +172,13 @@ impl RicoEngine {
             self.state_engines = vec![
                 StateEngines::Game(Box::new(game_eng)),
                 StateEngines::Sprite(Box::new(sprite_eng)),
-                StateEngines::IDE(Box::new(ide_eng)),
+                StateEngines::Ide(Box::new(ide_eng)),
                 StateEngines::Terminal(Box::new(term_eng)),
             ];
         } else {
             self.state_engines[0] = StateEngines::Game(Box::new(game_eng));
             self.state_engines[1] = StateEngines::Sprite(Box::new(sprite_eng));
-            self.state_engines[2] = StateEngines::IDE(Box::new(ide_eng));
+            self.state_engines[2] = StateEngines::Ide(Box::new(ide_eng));
         }
         *self.cart_path.lock().unwrap() = path;
     }
@@ -222,7 +222,7 @@ impl RicoEngine {
                                 StateEngines::Terminal(ref mut eng) => {
                                     eng.handle_char_input(c);
                                 }
-                                StateEngines::IDE(ref mut eng) => {
+                                StateEngines::Ide(ref mut eng) => {
                                     eng.handle_string_input(c.to_string());
                                 }
                             }
@@ -243,7 +243,7 @@ impl RicoEngine {
                                 StateEngines::Terminal(ref mut eng) => {
                                     bind_keyboard(&mut eng.keyboard, input.state, keycode);
                                 }
-                                StateEngines::IDE(ref mut eng) => {
+                                StateEngines::Ide(ref mut eng) => {
                                     bind_keyboard(&mut eng.keyboard, input.state, keycode);
                                 }
                             }
@@ -286,7 +286,7 @@ impl RicoEngine {
                                 bind_mouse_input(&mut eng.mouse, button, state);
                             }
                             StateEngines::Terminal(_) => {}
-                            StateEngines::IDE(_) => {}
+                            StateEngines::Ide(_) => {}
                         };
                     }
 
@@ -334,7 +334,7 @@ impl RicoEngine {
                                 );
                             }
                             StateEngines::Terminal(_) => {}
-                            StateEngines::IDE(_) => {}
+                            StateEngines::Ide(_) => {}
                         }
                     }
 
@@ -382,7 +382,7 @@ impl RicoEngine {
                 eng.update();
                 handle_engine_update(buffer, &mut **eng, 0, NAV_BAR_HEIGHT * SCALE);
             }
-            StateEngines::IDE(eng) => {
+            StateEngines::Ide(eng) => {
                 eng.update();
                 handle_engine_update(buffer, &mut **eng, 0, NAV_BAR_HEIGHT * SCALE);
             }
