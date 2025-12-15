@@ -24,7 +24,7 @@ impl NavEngine {
             pixels: Colors::pixels(SCREEN_SIZE, NAV_BAR_HEIGHT),
             mouse: MousePress::default(),
             options,
-            selected: 0,
+            selected: 2,
             just_switched: false,
         }
     }

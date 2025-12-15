@@ -5,7 +5,7 @@ use winit::event::VirtualKeyCode;
 
 use crate::{
     engine::rico::{PixelsType, ScreenEngine, SCREEN_SIZE},
-    input::keyboard::{str_from_key, Keyboard},
+    input::keyboard::Keyboard,
     render::{
         colors::Colors,
         pixels::{clear, print_scr_mid, rect_fill},
@@ -96,6 +96,12 @@ impl TerminalEngine {
         }
     }
 
+    pub fn handle_char_input(&mut self, s: char) {
+        let letter = s.to_string();
+        self.input.insert_str(self.cursor, &letter);
+        self.cursor += 1;
+    }
+
     pub fn update(&mut self) {
         self.frame_hash += 1;
         self.frame_hash %= 20;
@@ -131,21 +137,7 @@ impl TerminalEngine {
                     self.input.clear();
                     self.cursor = 0;
                 }
-                other => {
-                    let mut letter = str_from_key(&other).to_lowercase();
-                    if letter.len() != 1 {
-                        continue;
-                    };
-
-                    if self.keyboard.keys_pressed.contains(&VirtualKeyCode::LShift)
-                        || self.keyboard.keys_pressed.contains(&VirtualKeyCode::RShift)
-                    {
-                        letter = letter.to_uppercase();
-                    }
-
-                    self.input.insert_str(self.cursor, &letter);
-                    self.cursor += 1;
-                }
+                _ => {}
             };
         }
 

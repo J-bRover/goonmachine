@@ -22,7 +22,10 @@ use winit::{
 
 use super::{game::GameEngine, nav_bar::NavEngine, sprite::SpriteEngine};
 use crate::{
-    engine::terminal::{Commands, TerminalEngine},
+    engine::{
+        ide::IDEEngine,
+        terminal::{Commands, TerminalEngine},
+    },
     input::{keyboard::Keyboard, mouse::MousePress},
     render::colors::Colors,
     scripting::{
@@ -76,6 +79,7 @@ enum StateEngines {
     Game(Box<GameEngine>),
     Sprite(Box<SpriteEngine>),
     Terminal(Box<TerminalEngine>),
+    IDE(Box<IDEEngine>),
 }
 
 /* Add bindings for diff engines in this struct in the vector
@@ -125,6 +129,7 @@ impl RicoEngine {
             nav_engine: NavEngine::new(vec![
                 "Game".to_string(),
                 "Sprite".to_string(),
+                "IDE".to_string(),
                 "Term".to_string(),
             ]),
             state_engines: Vec::new(),
@@ -160,17 +165,20 @@ impl RicoEngine {
 
     pub fn load(&mut self, cart: Cartridge, path: String) {
         let sprite_eng = SpriteEngine::new(path.clone(), cart.sprite_sheet.clone());
+        let ide_eng = IDEEngine::default();
         let game_eng = GameEngine::new(cart);
         if self.state_engines.is_empty() {
             let term_eng = TerminalEngine::default();
             self.state_engines = vec![
                 StateEngines::Game(Box::new(game_eng)),
                 StateEngines::Sprite(Box::new(sprite_eng)),
+                StateEngines::IDE(Box::new(ide_eng)),
                 StateEngines::Terminal(Box::new(term_eng)),
             ];
         } else {
             self.state_engines[0] = StateEngines::Game(Box::new(game_eng));
             self.state_engines[1] = StateEngines::Sprite(Box::new(sprite_eng));
+            self.state_engines[2] = StateEngines::IDE(Box::new(ide_eng));
         }
         *self.cart_path.lock().unwrap() = path;
     }
@@ -206,6 +214,21 @@ impl RicoEngine {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
 
+                    WindowEvent::ReceivedCharacter(c) => {
+                        if !c.is_control() {
+                            match self.state_engines[self.nav_engine.selected] {
+                                StateEngines::Game(_) => {}
+                                StateEngines::Sprite(_) => {}
+                                StateEngines::Terminal(ref mut eng) => {
+                                    eng.handle_char_input(c);
+                                }
+                                StateEngines::IDE(ref mut eng) => {
+                                    eng.handle_string_input(c.to_string());
+                                }
+                            }
+                        }
+                    }
+
                     WindowEvent::KeyboardInput { input, .. } => {
                         if let Some(keycode) = input.virtual_keycode {
                             //Use match for finding which engine we're using rn
@@ -218,6 +241,9 @@ impl RicoEngine {
                                     bind_keyboard(&mut eng.keyboard, input.state, keycode);
                                 }
                                 StateEngines::Terminal(ref mut eng) => {
+                                    bind_keyboard(&mut eng.keyboard, input.state, keycode);
+                                }
+                                StateEngines::IDE(ref mut eng) => {
                                     bind_keyboard(&mut eng.keyboard, input.state, keycode);
                                 }
                             }
@@ -260,6 +286,7 @@ impl RicoEngine {
                                 bind_mouse_input(&mut eng.mouse, button, state);
                             }
                             StateEngines::Terminal(_) => {}
+                            StateEngines::IDE(_) => {}
                         };
                     }
 
@@ -307,6 +334,7 @@ impl RicoEngine {
                                 );
                             }
                             StateEngines::Terminal(_) => {}
+                            StateEngines::IDE(_) => {}
                         }
                     }
 
@@ -351,6 +379,10 @@ impl RicoEngine {
                 }
             }
             StateEngines::Sprite(eng) => {
+                eng.update();
+                handle_engine_update(buffer, &mut **eng, 0, NAV_BAR_HEIGHT * SCALE);
+            }
+            StateEngines::IDE(eng) => {
                 eng.update();
                 handle_engine_update(buffer, &mut **eng, 0, NAV_BAR_HEIGHT * SCALE);
             }
@@ -449,14 +481,14 @@ impl RicoEngine {
             match load_cartridge(&file) {
                 Ok(cart) => {
                     self.load(cart, file.clone());
-                    if let StateEngines::Terminal(ref mut eng) = self.state_engines[2] {
+                    if let StateEngines::Terminal(ref mut eng) = self.state_engines[3] {
                         eng.add_log(LogTypes::Ok(
                             format!("Successfully loaded cartridge from {file}").to_string(),
                         ));
                     }
                 }
                 Err(err) => {
-                    if let StateEngines::Terminal(ref mut eng) = self.state_engines[2] {
+                    if let StateEngines::Terminal(ref mut eng) = self.state_engines[3] {
                         eng.add_log(LogTypes::Err(err.to_string()));
                     }
                 }
