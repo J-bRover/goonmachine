@@ -25,6 +25,7 @@ A fantasy console inspired by PICO-8, built with Rust for performance and Lua fo
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Sprite Engine](#sprite-engine)
+- [IDE Engine](#ide-engine)
 - [Terminal Engine](#terminal-engine)
 - [Cartridge & Lua Files](#cartridge--lua-files)
 - [API Reference](#api-reference)
@@ -46,6 +47,7 @@ The console is designed to be simple yet powerful, allowing developers to create
 - **Lua Scripting**: Full Lua 5.4 support with custom module system. Only safe Lua features are enabled, allowing for security when running external cartridges.
 - **Built-in Console**: Integrated console engine for logging and debugging
 - **Sprite Support**: Create custom 32x32 sprites within the console and use and load them in the game
+- **Built-in IDE**: Edit your Lua scripts with syntax highlighting without leaving the console.
 - **Input Handling**: Mouse and keyboard input with frame-accurate state tracking
 - **Frame Rate Control**: Configurable frame rate with delta time support
 - **Modular Architecture**: Clean separation between game engine, console engine, and scripting
@@ -100,7 +102,7 @@ The console is designed to be simple yet powerful, allowing developers to create
 
 1. **Run RICO-32**: Execute `cargo run --release` and your RICO-32 will start!
 
-2. **Create your game scripts**: Edit `r32/main.lua` to start building your game.
+2. **Create your game scripts**: Edit `r32/main.lua` to start building your game. You can use the built-in IDE or your favorite external editor.
    
 3. **Build the game**: Use the sprite engine to create and edit sprites and the console to debug your game.
 
@@ -183,25 +185,53 @@ function update(dt)
     rico:draw(80, 48, 5)
 end
 ```
+
+## IDE Engine
+
+RICO-32 features a built-in code editor for Lua scripts, accessible from the "IDE" tab.
+
+### Features
+
+- **Syntax Highlighting**: Code is colored to distinguish keywords, strings, numbers, and comments.
+- **File Browser**: A list of all `.lua` files in the `r32/` directory is shown at the bottom. Click a file to open it.
+- **Create New Files**: Click the `+` button to create a new Lua file.
+- **Live External Reload**: The IDE automatically detects and reloads files if they are changed by an external editor.
+- **Status Bar**: Displays the current file name, line/column number, and an asterisk (`*`) for unsaved changes.
+- **Standard Editing Controls**:
+  - Full mouse support for cursor placement and selection.
+  - **Ctrl+S**: Save the current file.
+  - **Ctrl+C**: Copy selected text.
+  - **Ctrl+X**: Cut selected text.
+  - **Ctrl+V**: Paste text from the clipboard.
+  - **Ctrl+Z**: Undo the last action.
+  - **Ctrl+R**: Redo the last undone action.
+  - **Ctrl+A**: Select all text in the file.
+  - **Arrow Keys**: Move the cursor.
+  - **Shift + Arrow Keys**: Create or modify a selection.
+  - **Tab**: Insert 4 spaces.
+  - **Enter**: Insert a new line.
+  - **Backspace**: Delete characters or the current selection.
+
 ## Terminal Engine
 
-## Features
-- RICO-32 features an inbuilt terminal to perform essential RICO-related commands.
+RICO-32 features an inbuilt terminal to perform essential RICO-related commands.
 
 ### Commands 
-- load <filepath>: Loads a cartridge into memory, can be a normal .r32 cartridge or a base 64 version stored as .r32.txt.
-- save <filepath>: Saves the current loaded cartridge to a file on disk, can be a normal .r32 cartridge or a base 64 version stored as .r32.txt.
-- export <filepath>: Exports the current loaded cartridge as a standalone executable for the current operating system. There is currently only support for linux and windows.
-- help [cmd]: prints out a list of commands what they do. If a command is specified, gives details on how to use that command and a bit more info about it.
+- `load <filepath>`: Loads a cartridge into memory, can be a normal `.r32` cartridge or a base 64 version stored as `.r32.txt`.
+- `save <filepath>`: Saves the current loaded cartridge to a file on disk, can be a normal `.r32` cartridge or a base 64 version stored as `.r32.txt`.
+- `export <filepath>`: Exports the current loaded cartridge as a standalone executable for the current operating system. There is currently only support for linux and windows.
+- `mv <source> <destination>`: Moves or renames a file within the `r32/` directory. Parent directories for the destination will be created if they don't exist.
+- `rm <filename>`: Removes a Lua file from the `r32/` directory.
+- `help [cmd]`: prints out a list of commands what they do. If a command is specified, gives details on how to use that command and a bit more info about it.
 
 ## Cartridge & Lua Files
 
 - Lua files are **extracted to `r32/`** next to the executable and cartridge when a game is loaded.
 - Users can **edit files externally** with their favorite editor.
-- RICO-32 automatically watches the r32/ folder for any changes made through any IDE and auto recompiles the cartridge to be instantly loaded whenever the game is restarted through restarting the whole engine or the inbuilt game restart.
+- RICO-32 automatically watches the `r32/` folder for any changes made through any IDE and auto recompiles the cartridge to be instantly loaded whenever the game is restarted through restarting the whole engine or the inbuilt game restart.
 - Sprites are **never written to r32/**, remaining fully in memory and the cartridge, and must be saved to the cartridge using the checkmark within the sprite editor.
 - Cartridges fully contain all information related to all RICO-32 games, and thus RICO-32 games can be shared easily by sharing .r32 files or using their Base64 version.
-- To convert the formats of your cartridges from .r32 to .r32.txt (the base64 version), simply load whichever format from the inbuilt terminal and then save it back to whichever format.
+- To convert the formats of your cartridges from `.r32` to `.r32.txt` (the base64 version), simply load whichever format from the inbuilt terminal and then save it back to whichever format.
 ```bash
 load cart.r32
 save b64.r32.txt
@@ -353,15 +383,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 Copyright (c) 2025 Dhruv Goel
 
 ## TODO
-
-### Planned Features
-  
-- [ ] **Integrated Development Environment (IDE)**: Create a built-in IDE featuring:
-  - Code editor with syntax highlighting for Lua
-  - Live code reloading
-  - Integrated asset browser
-  - Debugging tools and breakpoints
-  - Performance profiler
 
 ### Future Enhancements
 
