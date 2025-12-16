@@ -24,6 +24,8 @@ use crate::{
 use regex::Regex;
 
 const IDE_FRAME_RATE: i32 = 30;
+const KEY_PRESS_FRAME_DELAY: i32 = 8;
+const KEY_PRESS_CONTINUOUS_FRAME_DIVISOR: i32 = 2;
 const TEXT_SPACE: usize = (SCREEN_SIZE as f32 * 1.4) as usize;
 const TEXT_HEIGHT: i32 = 6;
 const TEXT_WIDTH: i32 = 4;
@@ -81,6 +83,9 @@ pub struct IDEEngine {
     frame_hash: i32,
 
     regexes: Vec<Token>,
+
+    continuous_press_frames: i32,
+    last_frame_press: bool,
 }
 
 fn init_directory(
@@ -152,6 +157,8 @@ impl IDEEngine {
                 operator_token,
                 identifier_token,
             ],
+            continuous_press_frames: 0,
+            last_frame_press: false,
         }
     }
 
@@ -355,10 +362,19 @@ impl IDEEngine {
                 name_added.to_uppercase(),
             );
 
-            if self.mouse.just_pressed && self.mouse.y >= file_y_start && self.mouse.y < file_y_end
-            {
-                self.file_name = name.to_string();
-                self.cursor = (0, 0);
+            if self.mouse.y >= file_y_start && self.mouse.y < file_y_end {
+                print_scr_mini(
+                    &mut self.pixels,
+                    1,
+                    file_y_start,
+                    Colors::White,
+                    name_added.to_uppercase(),
+                );
+
+                if self.mouse.just_pressed {
+                    self.file_name = name.to_string();
+                    self.cursor = (0, 0);
+                }
             }
         }
 
@@ -370,18 +386,17 @@ impl IDEEngine {
         rect_fill(&mut self.pixels, 1, y, 7, 7, Colors::Silver);
         draw(&mut self.pixels, 2, y + 1, &ADD_BUTTON);
 
-        if self.mouse.just_pressed
-            && self.mouse.y >= y
-            && self.mouse.y < y + 7
-            && self.mouse.x >= 1
-            && self.mouse.x < 8
-        {
-            let f_path = PATH.to_owned() + &self.files.len().to_string() + ".lua";
-            if let Some(parent) = Path::new(&f_path).parent() {
-                fs::create_dir_all(parent).expect("Error writing to file");
-            }
+        if self.mouse.y >= y && self.mouse.y < y + 7 && self.mouse.x >= 1 && self.mouse.x < 8 {
+            rect_fill(&mut self.pixels, 1, y, 7, 7, Colors::White);
+            draw(&mut self.pixels, 2, y + 1, &ADD_BUTTON);
+            if self.mouse.just_pressed {
+                let f_path = PATH.to_owned() + &self.files.len().to_string() + ".lua";
+                if let Some(parent) = Path::new(&f_path).parent() {
+                    fs::create_dir_all(parent).expect("Error writing to file");
+                }
 
-            fs::write(f_path, " ").expect("Error writing to file");
+                fs::write(f_path, " ").expect("Error writing to file");
+            }
         }
     }
 
@@ -438,37 +453,55 @@ impl IDEEngine {
         let shift = self.keyboard.keys_pressed.contains(&VirtualKeyCode::LShift)
             || self.keyboard.keys_pressed.contains(&VirtualKeyCode::RShift);
 
-        let keys_just = self.keyboard.keys_just_pressed.clone();
         let keys_pressed = self.keyboard.keys_pressed.clone();
 
         let old_cursor = self.cursor;
 
-        for key in &keys_pressed {
-            match key {
-                VirtualKeyCode::Left
-                | VirtualKeyCode::Right
-                | VirtualKeyCode::Up
-                | VirtualKeyCode::Down
-                | VirtualKeyCode::Back
-                | VirtualKeyCode::Return => self.render_cursor(),
-                _ => {}
-            }
-        }
+        let matches = keys_pressed.iter().any(|k| {
+            matches!(
+                k,
+                VirtualKeyCode::Tab
+                    | VirtualKeyCode::Left
+                    | VirtualKeyCode::Right
+                    | VirtualKeyCode::Up
+                    | VirtualKeyCode::Down
+                    | VirtualKeyCode::Back
+                    | VirtualKeyCode::Return
+                    | VirtualKeyCode::A
+                    | VirtualKeyCode::S
+                    | VirtualKeyCode::C
+                    | VirtualKeyCode::V
+                    | VirtualKeyCode::X
+                    | VirtualKeyCode::Z
+                    | VirtualKeyCode::R
+            )
+        });
 
-        if self.frame_hash % 3 == 0 {
-            self.handle_special_keys(&keys_pressed);
-        } else if self.handle_special_keys(&keys_just) {
-            self.frame_hash = 0;
+        if matches {
+            self.render_cursor();
+            if self.last_frame_press {
+                self.continuous_press_frames += 1;
+            } else {
+                self.continuous_press_frames = 0;
+            }
+            self.last_frame_press = true;
+        } else {
+            self.last_frame_press = false;
+        };
+
+        if (self.continuous_press_frames < KEY_PRESS_FRAME_DELAY
+            && self.continuous_press_frames > 0)
+            || (self.continuous_press_frames % KEY_PRESS_CONTINUOUS_FRAME_DIVISOR != 0)
+        {
+            return;
         }
 
         let ctrl = self.keyboard.keys_pressed.contains(&VirtualKeyCode::LControl)
             || self.keyboard.keys_pressed.contains(&VirtualKeyCode::RControl);
         if ctrl {
-            if self.frame_hash % 6 == 0 {
-                self.handle_shortcuts(&keys_pressed);
-            } else if self.handle_shortcuts(&keys_just) {
-                self.frame_hash = 0;
-            }
+            self.handle_shortcuts(&keys_pressed);
+        } else {
+            self.handle_special_keys(&keys_pressed);
         }
 
         if self.cursor != old_cursor {

@@ -25,6 +25,7 @@ use crate::{
 
 //Not using normal Result type so we can add warnings in the future
 pub enum LogTypes {
+    Action(String),
     Ok(String),
     Err(String),
 }
@@ -34,6 +35,7 @@ pub enum LogTypes {
 impl fmt::Display for LogTypes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
+            LogTypes::Action(ref a) => a,
             LogTypes::Err(ref e) => e,
             LogTypes::Ok(ref m) => m,
         };
@@ -70,6 +72,7 @@ impl LuaAPI {
         for chunk in msg.as_bytes().chunks(30) {
             let chunk_string = String::from_utf8(chunk.to_vec()).unwrap();
             let part: LogTypes = match log {
+                LogTypes::Action(_) => LogTypes::Action(chunk_string),
                 LogTypes::Ok(_) => LogTypes::Ok(chunk_string),
                 LogTypes::Err(_) => LogTypes::Err(chunk_string),
             };

@@ -61,6 +61,7 @@ impl TerminalEngine {
         for chunk in msg.as_bytes().chunks(30) {
             let chunk_string = String::from_utf8(chunk.to_vec()).unwrap();
             let part: LogTypes = match log {
+                LogTypes::Action(_) => LogTypes::Action(chunk_string),
                 LogTypes::Ok(_) => LogTypes::Ok(chunk_string),
                 LogTypes::Err(_) => LogTypes::Err(chunk_string),
             };
@@ -127,7 +128,7 @@ impl TerminalEngine {
         self.frame_hash += 1;
         self.frame_hash %= 20;
         sync(&mut self.last_time, TERMINAL_FRAME_RATE);
-        clear(&mut self.pixels, Colors::Gray);
+        clear(&mut self.pixels, Colors::Black);
 
         self.commands.clear();
 
@@ -148,7 +149,7 @@ impl TerminalEngine {
                 }
                 VirtualKeyCode::Return => {
                     let cmd = self.input.clone();
-                    self.add_log(LogTypes::Ok(">".to_string() + &cmd));
+                    self.add_log(LogTypes::Action(">".to_string() + &cmd));
 
                     match self.parse_command(&cmd) {
                         Ok(cmd) => self.commands.push(cmd),
@@ -165,7 +166,8 @@ impl TerminalEngine {
         for (i, log) in self.logs[self.logs.len().saturating_sub(38)..].iter().enumerate() {
             let col = match log {
                 LogTypes::Err(_) => Colors::Maroon,
-                LogTypes::Ok(_) => Colors::Black,
+                LogTypes::Ok(_) => Colors::White,
+                LogTypes::Action(_) => Colors::Silver,
             };
             print_scr_mid(&mut self.pixels, 1, 6 * i as i32 + 20, col, log.to_string());
         }
@@ -183,7 +185,7 @@ impl TerminalEngine {
             &mut self.pixels,
             1,
             SCREEN_SIZE as i32 * 2 - 6,
-            Colors::Black,
+            Colors::White,
             self.input.to_string(),
         );
     }

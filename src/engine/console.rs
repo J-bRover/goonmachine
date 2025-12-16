@@ -113,6 +113,7 @@ impl ConsoleEngine {
             //Maybe make constants for colors in future
             let col = match log {
                 LogTypes::Err(_) => Colors::Maroon,
+                LogTypes::Action(_) => Colors::Black,
                 LogTypes::Ok(_) => Colors::Black,
             };
             print_scr_mid(&mut self.pixels, 1, 6 * i as i32 + 2 + 3 * 6, col, log.to_string());
