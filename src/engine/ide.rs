@@ -31,13 +31,8 @@ const TEXT_WIDTH: i32 = 4;
 
 const N: Colors = Colors::Blank;
 const B: Colors = Colors::Black;
-const ADD_BUTTON: [[Colors; 5]; 5] = [
-    [N, N, B, N, N],
-    [N, N, B, N, N],
-    [B, B, B, B, B],
-    [N, N, B, N, N],
-    [N, N, B, N, N],
-];
+const ADD_BUTTON: [[Colors; 5]; 5] =
+    [[N, N, B, N, N], [N, N, B, N, N], [B, B, B, B, B], [N, N, B, N, N], [N, N, B, N, N]];
 
 struct Token(Regex, Colors);
 
@@ -157,7 +152,9 @@ impl IDEEngine {
 
     pub fn update(&mut self) {
         self.frame_hash = (self.frame_hash + 1) % 24;
-        if self.file.is_empty() { self.file = vec![" ".to_string()] };
+        if self.file.is_empty() {
+            self.file = vec![" ".to_string()]
+        };
         sync(&mut self.last_time, IDE_FRAME_RATE);
         clear(&mut self.pixels, Colors::Black);
 
@@ -321,13 +318,22 @@ impl IDEEngine {
         for (i, key) in files.iter().enumerate() {
             let file_y_start = TEXT_SPACE as i32 + 12 + i as i32 * 5;
             let file_y_end = file_y_start + 5;
-            print_scr_mini(&mut self.pixels, 1, file_y_start, Colors::Silver, key.to_string().to_uppercase());
+            print_scr_mini(
+                &mut self.pixels,
+                1,
+                file_y_start,
+                Colors::Silver,
+                key.to_string().to_uppercase(),
+            );
 
-            if self.mouse.just_pressed && self.mouse.y >= file_y_start && self.mouse.y < file_y_end {
+            if self.mouse.just_pressed && self.mouse.y >= file_y_start && self.mouse.y < file_y_end
+            {
                 self.file_name = key.to_string();
                 self.cursor = (0, 0);
                 self.file = fs::read_to_string(PATH.to_string() + &self.file_name)
-                    .expect(&format!("Could not find {key} in cartridge").to_string())
+                    .unwrap_or_else(|_| {
+                        panic!("{}", format!("Could not find {key} in cartridge").to_string())
+                    })
                     .split("\n")
                     .map(|x| x.to_string())
                     .collect();
@@ -340,9 +346,14 @@ impl IDEEngine {
     fn add_button(&mut self) {
         let y = TEXT_SPACE as i32 + 12 + (self.files.len() as i32) * 5 + 1;
         rect_fill(&mut self.pixels, 1, y, 7, 7, Colors::Silver);
-        draw(&mut self.pixels, 2, y+1, &ADD_BUTTON);
+        draw(&mut self.pixels, 2, y + 1, &ADD_BUTTON);
 
-        if self.mouse.just_pressed && self.mouse.y >= y && self.mouse.y < y + 7 && self.mouse.x >= 1 && self.mouse.x < 8 {
+        if self.mouse.just_pressed
+            && self.mouse.y >= y
+            && self.mouse.y < y + 7
+            && self.mouse.x >= 1
+            && self.mouse.x < 8
+        {
             let f_path = PATH.to_owned() + &self.files.len().to_string() + ".lua";
             if let Some(parent) = Path::new(&f_path).parent() {
                 fs::create_dir_all(parent).expect("Error writing to file");

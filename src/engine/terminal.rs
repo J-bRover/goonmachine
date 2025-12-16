@@ -10,7 +10,7 @@ use crate::{
         colors::Colors,
         pixels::{clear, print_scr_mid, rect_fill},
     },
-    scripting::{lua::LogTypes},
+    scripting::lua::LogTypes,
     time::sync,
 };
 
@@ -23,7 +23,7 @@ pub enum Commands {
     Save(String),
     Export(String),
     Remove(String),
-    Move(String, String)
+    Move(String, String),
 }
 
 #[derive(ScreenEngine)]
@@ -100,10 +100,11 @@ impl TerminalEngine {
                     file.push_str(".lua");
                 }
                 Ok(Commands::Remove(file))
-            },
+            }
             "mv" => {
                 let mut file = tokens.get(1).ok_or("Must pass in a file to move")?.to_string();
-                let mut file2 = tokens.get(2).ok_or("Must pass in a location to be moved to")?.to_string();
+                let mut file2 =
+                    tokens.get(2).ok_or("Must pass in a location to be moved to")?.to_string();
                 if !file.ends_with(".lua") {
                     file.push_str(".lua");
                 }
@@ -111,7 +112,7 @@ impl TerminalEngine {
                     file2.push_str(".lua");
                 }
                 Ok(Commands::Move(file, file2))
-            },
+            }
             _ => Err("Not a valid command".into()),
         }
     }

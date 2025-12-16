@@ -304,8 +304,8 @@ impl RicoEngine {
     pub fn update(&mut self, buffer: &mut [u8]) {
         self.nav_engine.update();
         handle_engine_update(buffer, &mut self.nav_engine, 0, 0);
-        
-        //IDE should look for and update scripts from external IDEs regardless of screen 
+
+        //IDE should look for and update scripts from external IDEs regardless of screen
         if let Some(StateEngines::Ide(ref mut eng)) = self.state_engines.get_mut(2) {
             let _ = eng.update_files();
         }
@@ -374,10 +374,14 @@ impl RicoEngine {
                                 Some("mv") => {
                                     eng.add_log(LogTypes::Ok("Moves/renames a file in the `r32/` directory. This is the standard way of renaming files.".to_string()));
                                     eng.add_log(LogTypes::Ok("This command will automatically create parent directories if they don't already exist.".to_string()));
-                                    eng.add_log(LogTypes::Ok("Usage: mv <source> <destination>".to_string()));
+                                    eng.add_log(LogTypes::Ok(
+                                        "Usage: mv <source> <destination>".to_string(),
+                                    ));
                                 }
                                 Some("rm") => {
-                                    eng.add_log(LogTypes::Ok("Removes a Lua file from the `r32/` directory.".to_string()));
+                                    eng.add_log(LogTypes::Ok(
+                                        "Removes a Lua file from the `r32/` directory.".to_string(),
+                                    ));
                                     eng.add_log(LogTypes::Ok("Usage: rm <filename>".to_string()));
                                 }
                                 None => {
@@ -421,11 +425,13 @@ impl RicoEngine {
                             Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
                         },
                         Commands::Remove(file) => {
-                            match fs::remove_file(PATH.to_string() + &file){
-                                Ok(_) => eng.add_log(LogTypes::Ok(format!("Removed {file}").to_string())),
+                            match fs::remove_file(PATH.to_string() + &file) {
+                                Ok(_) => {
+                                    eng.add_log(LogTypes::Ok(format!("Removed {file}").to_string()))
+                                }
                                 Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
                             };
-                        },
+                        }
                         Commands::Move(file, file2) => {
                             let result = (|| -> Result<(), Box<dyn Error>> {
                                 let file_r32 = PATH.to_string() + &file;
@@ -445,7 +451,7 @@ impl RicoEngine {
                                     format!("Successfully moved {file} to {file2}").to_string(),
                                 )),
                             }
-                        },
+                        }
                         Commands::Export(file) => {
                             let file = add_ext(file);
                             let f_clone = file.clone();
