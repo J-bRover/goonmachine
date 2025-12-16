@@ -65,8 +65,8 @@ pub struct IDEEngine {
     scroll_offset: (usize, usize),
     selection: Option<((usize, usize), (usize, usize))>,
 
-    undo_stack: Vec<Change>,
-    redo_stack: Vec<Change>,
+    undo_stack: HashMap<String, Vec<Change>>,
+    redo_stack: HashMap<String, Vec<Change>>,
     clipboard: String,
     frame_hash: i32,
 
@@ -134,8 +134,8 @@ impl IDEEngine {
             cursor: (0, 0),
             scroll_offset: (0, 0),
             selection: None,
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
+            undo_stack: HashMap::new(),
+            redo_stack: HashMap::new(),
             clipboard: String::new(),
             frame_hash: 0,
             regexes: vec![
@@ -594,19 +594,23 @@ impl IDEEngine {
                     });
                 }
                 VirtualKeyCode::Z => {
-                    if let Some(change) = self.undo_stack.pop() {
+                    if let Some(change) =
+                        self.undo_stack.get_mut(&self.file_name).and_then(|v| v.pop())
+                    {
                         self.apply_change(&change.added_text, change.added_start, true);
                         self.apply_change(&change.deleted_text, change.deleted_start, false);
                         self.cursor = change.cursor_before;
-                        self.redo_stack.push(change);
+                        self.redo_stack.entry(self.file_name.clone()).or_default().push(change);
                     }
                 }
                 VirtualKeyCode::R => {
-                    if let Some(change) = self.redo_stack.pop() {
+                    if let Some(change) =
+                        self.redo_stack.get_mut(&self.file_name).and_then(|v| v.pop())
+                    {
                         self.apply_change(&change.deleted_text, change.deleted_start, true);
                         self.apply_change(&change.added_text, change.added_start, false);
                         self.cursor = change.cursor_after;
-                        self.undo_stack.push(change);
+                        self.undo_stack.entry(self.file_name.clone()).or_default().push(change);
                     }
                 }
                 VirtualKeyCode::C => self.clipboard = self.get_selection_text(),
@@ -654,8 +658,8 @@ impl IDEEngine {
 
     fn push_undo(&mut self, change: Change) {
         self.upto_date = false;
-        self.undo_stack.push(change);
-        self.redo_stack.clear();
+        self.undo_stack.entry(self.file_name.clone()).or_default().push(change);
+        self.redo_stack.remove(&self.file_name);
     }
 
     fn apply_change(&mut self, text: &str, start: (usize, usize), is_delete: bool) {
