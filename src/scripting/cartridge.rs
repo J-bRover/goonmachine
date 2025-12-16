@@ -3,7 +3,6 @@ use std::{
     error::Error,
     fs,
     io::{Read, Write},
-    path::Path,
 };
 
 use base64::{engine::general_purpose, Engine as _};
@@ -14,7 +13,6 @@ use crate::{
     render::colors::Colors,
 };
 use bincode::{config::standard, Decode, Encode};
-use walkdir::WalkDir;
 
 #[derive(Encode, Decode, Debug, Clone)]
 pub struct Cartridge {
@@ -91,55 +89,9 @@ pub fn get_cart(bin_path: &str) -> Result<Cartridge, Box<dyn Error>> {
     Ok(cart)
 }
 
-pub fn load_cartridge(bin_path: &str) -> Result<Cartridge, Box<dyn Error>> {
-    let cart = get_cart(bin_path)?;
-
-    if Path::new(PATH).exists() {
-        for entry in fs::read_dir(PATH)? {
-            let path = entry?.path();
-            if path.is_dir() {
-                fs::remove_dir_all(path)?;
-            } else {
-                fs::remove_file(path)?;
-            }
-        }
-    }
-    for (file, content) in &cart.scripts {
-        let f_path = PATH.to_owned() + file;
-        if let Some(parent) = Path::new(&f_path).parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        fs::write(f_path, content)?;
-    }
-
-    Ok(cart)
-}
-
 pub fn update_sprites(bin_path: &str, sprite_sheet: &[PixelsType]) -> Result<(), Box<dyn Error>> {
     let mut cart = get_cart(bin_path)?;
     cart.sprite_sheet = sprite_sheet.to_vec();
     write_cart(bin_path, &cart)?;
-    Ok(())
-}
-
-pub fn update_scripts(bin_path: &str) -> Result<(), Box<dyn Error>> {
-    let mut cart = get_cart(bin_path)?;
-    cart.scripts.clear();
-
-    for entry in WalkDir::new(PATH)
-        .into_iter()
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_file() && e.file_name().to_str().unwrap().ends_with(".lua"))
-    {
-        let path = entry.path();
-        //That replace took 20 minutes to debug btw
-        let rel = path.strip_prefix(PATH).unwrap().to_string_lossy().to_string().replace("\\", "/");
-        let contents = fs::read_to_string(path)?;
-        cart.scripts.insert(rel, contents);
-    }
-
-    write_cart(bin_path, &cart)?;
-
     Ok(())
 }

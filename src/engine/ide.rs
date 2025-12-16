@@ -1,22 +1,37 @@
-use std::{cmp::min, collections::HashSet, time::Instant};
+use std::{
+    cmp::min,
+    collections::{HashMap, HashSet},
+    error::Error,
+    fs, io,
+    os::unix::fs::MetadataExt,
+    path::Path,
+    time::Instant,
+};
 
 use macro_procs::ScreenEngine;
+use walkdir::WalkDir;
 use winit::event::VirtualKeyCode;
 
 use crate::{
-    engine::rico::{PixelsType, ScreenEngine, SCREEN_SIZE},
-    input::keyboard::Keyboard,
+    engine::{
+        rico::{PixelsType, ScreenEngine, SCREEN_SIZE},
+    },
+    input::{keyboard::Keyboard},
     render::{
         colors::Colors,
         pixels::{clear, print_scr_mid, rect_fill},
     },
+    scripting::cartridge::{get_cart, write_cart, PATH},
     time::sync,
 };
 use regex::Regex;
 
 const IDE_FRAME_RATE: i32 = 30;
+const TEXT_SPACE: usize = (SCREEN_SIZE as f32 * 1.5) as usize;
 const TEXT_HEIGHT: i32 = 6;
 const TEXT_WIDTH: i32 = 4;
+
+struct Token(Regex, Colors);
 
 #[derive(Clone)]
 struct Change {
@@ -34,8 +49,13 @@ struct Change {
 pub struct IDEEngine {
     pixels: PixelsType,
     last_time: Instant,
+    last_checked_files: Instant,
     pub keyboard: Keyboard,
 
+    cart_path: String,
+    files: HashMap<String, i64>,
+
+    file_name: String,
     file: Vec<String>,
     cursor: (usize, usize),
     scroll_offset: (usize, usize),
@@ -46,37 +66,66 @@ pub struct IDEEngine {
     clipboard: String,
     frame_hash: i32,
 
-    regexes: Vec<Regex>,
+    regexes: Vec<Token>,
+
+    upto_date: bool,
 }
 
-impl Default for IDEEngine {
-    fn default() -> Self {
-        let initial_file = vec![
-            "Welcome to the R32 IDE!".to_string(),
-            "".to_string(),
-            "Features:".to_string(),
-            "- Arrow keys to move".to_string(),
-            "- Shift + Arrows to select".to_string(),
-            "- Ctrl+C to copy".to_string(),
-            "- Ctrl+V to paste".to_string(),
-            "- Ctrl+X to cut".to_string(),
-            "- Ctrl+Z to undo".to_string(),
-            "- Ctrl+R to redo".to_string(),
-            "".to_string(),
-            "Enjoy coding!".to_string(),
-        ];
+fn init_directory(scripts: HashMap<String, String>) -> Result<(), Box<dyn Error>> {
+    if Path::new(PATH).exists() {
+        for entry in fs::read_dir(PATH)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                fs::remove_dir_all(path)?;
+            } else {
+                fs::remove_file(path)?;
+            }
+        }
+    }
+    for (file, content) in &scripts {
+        let f_path = PATH.to_owned() + file;
+        if let Some(parent) = Path::new(&f_path).parent() {
+            fs::create_dir_all(parent)?;
+        }
 
+        fs::write(f_path, content)?;
+    }
+    Ok(())
+}
+
+impl IDEEngine {
+    pub fn new(path: String, scripts: HashMap<String, String>) -> Self {
+        let rico_re = Regex::new(r"^(rico):").unwrap();
+        let rico_token = Token(rico_re, Colors::Purple);
         let string_re = Regex::new(r#"^"[^"]*"|^'[^']*'"#).unwrap();
+        let string_token = Token(string_re, Colors::Orange);
         let keyword_re = Regex::new(r"^(local|function|end|if|then|else|elseif|for|while|do|repeat|until|return|break|and|or|not|in)\b").unwrap();
+        let keyword_token = Token(keyword_re, Colors::Blue);
         let number_re = Regex::new(r"^\d+\.?\d*").unwrap();
+        let number_token = Token(number_re, Colors::Yellow);
         let operator_re = Regex::new(r"^[+\-*/%=<>~]+").unwrap();
+        let operator_token = Token(operator_re, Colors::Teal);
         let identifier_re = Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*").unwrap();
+        let identifier_token = Token(identifier_re, Colors::Silver);
+
+        init_directory(scripts).expect("Could not initialize r32/ directory");
+
+        let file_name = "main.lua";
+        let contents: Vec<String> = fs::read_to_string(PATH.to_string() + file_name)
+            .expect("Could not find main.lua in cartridge")
+            .split("\n")
+            .map(|x| x.to_string())
+            .collect();
 
         IDEEngine {
             pixels: Colors::pixels(SCREEN_SIZE, SCREEN_SIZE * 2),
             last_time: Instant::now(),
+            last_checked_files: Instant::now(),
             keyboard: Keyboard::default(),
-            file: initial_file,
+            files: HashMap::new(),
+            file_name: file_name.to_string(),
+            file: contents,
+            cart_path: path,
             cursor: (0, 0),
             scroll_offset: (0, 0),
             selection: None,
@@ -84,24 +133,105 @@ impl Default for IDEEngine {
             redo_stack: Vec::new(),
             clipboard: String::new(),
             frame_hash: 0,
-            regexes: vec![string_re, keyword_re, number_re, operator_re, identifier_re],
+            regexes: vec![
+                rico_token,
+                string_token,
+                keyword_token,
+                number_token,
+                operator_token,
+                identifier_token,
+            ],
+            upto_date: true,
         }
     }
-}
 
-impl IDEEngine {
     pub fn update(&mut self) {
         self.frame_hash = (self.frame_hash + 1) % 24;
         sync(&mut self.last_time, IDE_FRAME_RATE);
         clear(&mut self.pixels, Colors::Black);
 
+        let _ = self.update_files();
         self.scroll_to_cursor();
         self.render();
         self.handle_input();
     }
 
+    fn update_files(&mut self) -> Result<(), Box<dyn Error>> {
+        if self.last_checked_files.elapsed().as_millis() >= 500 {
+            self.last_checked_files = Instant::now();
+            let mut changed = false;
+            let mut cur_files: HashSet<String> = HashSet::new();
+
+            for entry in WalkDir::new(PATH).into_iter().filter_map(Result::ok).filter(|e| {
+                e.file_type().is_file() && e.file_name().to_str().unwrap().ends_with(".lua")
+            }) {
+                let path = entry.path();
+                //That replace took 20 minutes to debug btw
+                let rel = path
+                    .strip_prefix(PATH)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+                    .replace("\\", "/");
+                let cur_mtime = fs::metadata(path)?.mtime();
+                cur_files.insert(rel.clone());
+
+                match self.files.get(&rel) {
+                    Some(mtime) => {
+                        if *mtime != cur_mtime {
+                            changed = true;
+                            self.files.insert(rel, cur_mtime);
+                        }
+                    }
+                    None => {
+                        changed = true;
+                        self.files.insert(rel, cur_mtime);
+                    }
+                }
+            }
+
+            let keys_to_remove: Vec<_> =
+                self.files.keys().filter(|k| !cur_files.contains(*k)).cloned().collect();
+
+            if !keys_to_remove.is_empty() {
+                changed = true;
+            }
+
+            for key in keys_to_remove {
+                self.files.remove(&key);
+            }
+
+            if changed {
+                let mut cart = get_cart(&self.cart_path)?;
+                cart.scripts = self
+                    .files
+                    .keys()
+                    .map(|key| {
+                        let contents = fs::read_to_string(PATH.to_string() + key)
+                            .expect("Sudden change in files");
+                        if *key == self.file_name {
+                            self.file = contents.split("\n").map(|x| x.to_string()).collect();
+                            let out_of_scope = self
+                                .file
+                                .get(self.cursor.1)
+                                .map_or_else(|| true, |line| line.len() <= self.cursor.0);
+                            if out_of_scope {
+                                self.cursor = (0, 0);
+                            }
+                            self.upto_date = true;
+                        }
+                        (key.clone(), contents)
+                    })
+                    .collect();
+                write_cart(&self.cart_path, &cart)?;
+            }
+        };
+
+        Ok(())
+    }
+
     fn render(&mut self) {
-        let visible_rows = SCREEN_SIZE as i32 / TEXT_HEIGHT;
+        let visible_rows = TEXT_SPACE as i32 / TEXT_HEIGHT;
         let visible_cols = SCREEN_SIZE as i32 / TEXT_WIDTH;
 
         if let Some((start, end)) = self.get_sorted_selection() {
@@ -128,7 +258,7 @@ impl IDEEngine {
 
         for (row_idx, line) in self.file.iter().enumerate().skip(self.scroll_offset.1) {
             let y = (row_idx - self.scroll_offset.1) as i32 * TEXT_HEIGHT + 1;
-            if y + TEXT_HEIGHT >= SCREEN_SIZE as i32 {
+            if y >= TEXT_SPACE as i32 {
                 break;
             }
 
@@ -150,23 +280,34 @@ impl IDEEngine {
             self.render_cursor();
         }
 
-        rect_fill(&mut self.pixels, 0, SCREEN_SIZE as i32, SCREEN_SIZE as i32, 7, Colors::Black);
+        rect_fill(&mut self.pixels, 0, TEXT_SPACE as i32, SCREEN_SIZE as i32, 7, Colors::Silver);
         let curr_line = self.cursor.1 + 1;
         let total_lines = self.file.len();
+        let mut name = self.file_name.clone();
+
+        if !self.upto_date {
+            name.push('*');
+        }
+
         print_scr_mid(
             &mut self.pixels,
             1,
-            SCREEN_SIZE as i32 + 1,
-            Colors::Silver,
-            format!("LINE {curr_line}/{total_lines}").to_string(),
+            TEXT_SPACE as i32 + 1,
+            Colors::Black,
+            format!("{name} LINE {curr_line}/{total_lines}").to_string(),
         );
+    }
+
+    fn save(&mut self) -> io::Result<()> {
+        self.upto_date = true;
+        fs::write(PATH.to_string() + &self.file_name, self.file.join("\n"))
     }
 
     fn render_cursor(&mut self) {
         let cursor_x = (self.cursor.0.saturating_sub(self.scroll_offset.0)) as i32 * TEXT_WIDTH + 1;
         let cursor_y =
             (self.cursor.1.saturating_sub(self.scroll_offset.1)) as i32 * TEXT_HEIGHT + 1;
-        if cursor_y >= 0 && cursor_y < SCREEN_SIZE as i32 * 2 {
+        if cursor_y >= 0 && cursor_y < TEXT_SPACE as i32 {
             rect_fill(&mut self.pixels, cursor_x, cursor_y, 1, TEXT_HEIGHT, Colors::Yellow);
         }
     }
@@ -181,13 +322,10 @@ impl IDEEngine {
                 break;
             }
 
-            let colors =
-                [Colors::Orange, Colors::Blue, Colors::Yellow, Colors::Teal, Colors::Silver];
-
             let mut found = false;
-            for (i, regex) in self.regexes.iter().enumerate() {
+            for Token(regex, color) in self.regexes.iter() {
                 if let Some(m) = regex.find(remaining) {
-                    result.push((m.as_str().to_string(), colors[i]));
+                    result.push((m.as_str().to_string(), *color));
                     remaining = &remaining[m.end()..];
                     found = true;
                     break;
@@ -414,6 +552,9 @@ impl IDEEngine {
                     self.selection = Some(((0, 0), (end_col, end_row)));
                     self.cursor = (end_col, end_row);
                 }
+                VirtualKeyCode::S => {
+                    let _ = self.save();
+                }
                 _ => {
                     this_matched = false;
                 }
@@ -447,6 +588,7 @@ impl IDEEngine {
     }
 
     fn push_undo(&mut self, change: Change) {
+        self.upto_date = false;
         self.undo_stack.push(change);
         self.redo_stack.clear();
     }
@@ -562,7 +704,7 @@ impl IDEEngine {
     }
 
     fn scroll_to_cursor(&mut self) {
-        let visible_rows = SCREEN_SIZE / TEXT_HEIGHT as usize;
+        let visible_rows = TEXT_SPACE / TEXT_HEIGHT as usize;
         let visible_cols = SCREEN_SIZE / TEXT_WIDTH as usize;
 
         if self.cursor.1 < self.scroll_offset.1 {

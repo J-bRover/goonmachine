@@ -1,16 +1,5 @@
 use rayon::prelude::*;
-use std::{
-    error::Error,
-    fs,
-    io::Write,
-    path::Path,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
-};
-
-use notify::RecursiveMode;
-use notify_debouncer_mini::{new_debouncer, DebouncedEventKind};
-use std::sync::mpsc::channel;
+use std::{error::Error, fs, io::Write, time::Instant};
 
 use pixels::Pixels;
 use winit::{
@@ -29,9 +18,7 @@ use crate::{
     input::{keyboard::Keyboard, mouse::MousePress},
     render::colors::Colors,
     scripting::{
-        cartridge::{
-            decode, get_cart, load_cartridge, update_scripts, write_cart, Cartridge, PATH,
-        },
+        cartridge::{decode, get_cart, write_cart, Cartridge},
         lua::LogTypes,
     },
 };
@@ -87,44 +74,14 @@ enum StateEngines {
  * Screen engines should auto derive the ScreenEngine trait
  */
 pub struct RicoEngine {
-    cart_path: Arc<Mutex<String>>,
+    cart_path: String,
     nav_engine: NavEngine,
     state_engines: Vec<StateEngines>,
 }
 
-fn watch_folder(path: Arc<Mutex<String>>) -> Result<(), Box<dyn Error>> {
-    let (tx, rx) = channel();
-
-    // Create a debouncer to avoid getting multiple events for the same change
-    let mut debouncer = new_debouncer(Duration::from_millis(500), tx)?;
-
-    // Add path to be watched
-    debouncer.watcher().watch(Path::new(PATH), RecursiveMode::Recursive)?;
-
-    for result in rx {
-        match result {
-            Ok(events) => {
-                let should_update = events.iter().any(|e| {
-                    e.kind == DebouncedEventKind::Any
-                        && e.path.extension().and_then(|s| s.to_str()) == Some("lua")
-                });
-
-                if should_update {
-                    let p = path.lock().expect("Couldn't resolve path").to_string();
-                    update_scripts(&p)?;
-                }
-            }
-            Err(e) => println!("Watch error: {:?}", e),
-        }
-    }
-
-    Ok(())
-}
-
 impl RicoEngine {
     pub fn new(path: String) -> Self {
-        let cart_path = Arc::from(Mutex::from(path));
-        let path_clone = cart_path.clone();
+        let cart_path = path;
         let mut eng = RicoEngine {
             nav_engine: NavEngine::new(vec![
                 "Game".to_string(),
@@ -136,36 +93,23 @@ impl RicoEngine {
             cart_path,
         };
 
-        let p = eng.cart_path.lock().unwrap().to_string().clone();
-        let cart = match load_cartridge(&p) {
+        let p = eng.cart_path.clone();
+        let cart = match get_cart(&p) {
             Ok(cart) => cart,
             Err(_) => {
                 let cart = Cartridge::default();
                 let _ = write_cart(&p, &cart);
-                for (file, content) in &cart.scripts {
-                    let f_path = PATH.to_owned() + file;
-                    if let Some(parent) = Path::new(&f_path).parent() {
-                        fs::create_dir_all(parent).expect("Could not initialize r32/ directory");
-                    }
-
-                    fs::write(f_path, content).expect("Could not initialize r32/ directory");
-                }
                 cart
             }
         };
         eng.load(cart, p);
-
-        std::thread::spawn(|| match watch_folder(path_clone) {
-            Ok(_) => println!("Watcher exited normally"),
-            Err(e) => println!("Watcher error: {:?}", e),
-        });
 
         eng
     }
 
     pub fn load(&mut self, cart: Cartridge, path: String) {
         let sprite_eng = SpriteEngine::new(path.clone(), cart.sprite_sheet.clone());
-        let ide_eng = IDEEngine::default();
+        let ide_eng = IDEEngine::new(path.clone(), cart.scripts.clone());
         let game_eng = GameEngine::new(cart);
         if self.state_engines.is_empty() {
             let term_eng = TerminalEngine::default();
@@ -180,7 +124,7 @@ impl RicoEngine {
             self.state_engines[1] = StateEngines::Sprite(Box::new(sprite_eng));
             self.state_engines[2] = StateEngines::Ide(Box::new(ide_eng));
         }
-        *self.cart_path.lock().unwrap() = path;
+        self.cart_path = path;
     }
 
     //Base boot function, needs to take in whole self cause borrowing bs
@@ -372,8 +316,7 @@ impl RicoEngine {
                 handle_engine_update(buffer, console, 0, WINDOW_WIDTH + (NAV_BAR_HEIGHT * SCALE));
 
                 if console.restart {
-                    let cart = get_cart(&self.cart_path.lock().unwrap().to_string())
-                        .expect("Could not load/create cartridge");
+                    let cart = get_cart(&self.cart_path).expect("Could not load/create cartridge");
                     let game_eng = GameEngine::new(cart);
                     **eng = game_eng;
                 }
@@ -435,7 +378,7 @@ impl RicoEngine {
                         Commands::Load(file) => {
                             to_be_loaded = Some(file);
                         }
-                        Commands::Save(file) => match get_cart(&self.cart_path.lock().unwrap()) {
+                        Commands::Save(file) => match get_cart(&self.cart_path) {
                             Ok(cart) => match write_cart(&file, &cart) {
                                 Ok(_) => eng.add_log(LogTypes::Ok(
                                     format!("Successfully saved cartridge to {file}").to_string(),
@@ -449,7 +392,7 @@ impl RicoEngine {
                             let f_clone = file.clone();
                             let result = (|| -> Result<(), Box<dyn Error>> {
                                 let exe = fs::read(std::env::current_exe()?)?;
-                                let path = self.cart_path.lock().unwrap().clone();
+                                let path = self.cart_path.clone();
                                 let mut cart = fs::read(&path)?;
                                 if path.ends_with(".r32.txt") {
                                     cart = decode(&cart)
@@ -478,7 +421,7 @@ impl RicoEngine {
         }
 
         if let Some(file) = to_be_loaded {
-            match load_cartridge(&file) {
+            match get_cart(&file) {
                 Ok(cart) => {
                     self.load(cart, file.clone());
                     if let StateEngines::Terminal(ref mut eng) = self.state_engines[3] {
