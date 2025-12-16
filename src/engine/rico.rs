@@ -1,5 +1,5 @@
 use rayon::prelude::*;
-use std::{error::Error, fs, io::Write, time::Instant};
+use std::{error::Error, fs, io::Write, path::Path, time::Instant};
 
 use pixels::Pixels;
 use winit::{
@@ -18,7 +18,7 @@ use crate::{
     input::{keyboard::Keyboard, mouse::MousePress},
     render::colors::Colors,
     scripting::{
-        cartridge::{decode, get_cart, write_cart, Cartridge},
+        cartridge::{decode, get_cart, write_cart, Cartridge, PATH},
         lua::LogTypes,
     },
 };
@@ -371,6 +371,15 @@ impl RicoEngine {
                                         "Usage: export <filename>".to_string(),
                                     ));
                                 }
+                                Some("mv") => {
+                                    eng.add_log(LogTypes::Ok("Moves/renames a file in the `r32/` directory. This is the standard way of renaming files.".to_string()));
+                                    eng.add_log(LogTypes::Ok("This command will automatically create parent directories if they don't already exist.".to_string()));
+                                    eng.add_log(LogTypes::Ok("Usage: mv <source> <destination>".to_string()));
+                                }
+                                Some("rm") => {
+                                    eng.add_log(LogTypes::Ok("Removes a Lua file from the `r32/` directory.".to_string()));
+                                    eng.add_log(LogTypes::Ok("Usage: rm <filename>".to_string()));
+                                }
                                 None => {
                                     eng.add_log(LogTypes::Ok(
                                         "load: loads cartridge into console memory".to_string(),
@@ -380,6 +389,14 @@ impl RicoEngine {
                                     ));
                                     eng.add_log(LogTypes::Ok(
                                         "export: exports cartridge to a standalone executable"
+                                            .to_string(),
+                                    ));
+                                    eng.add_log(LogTypes::Ok(
+                                        "mv: moves/renames a file in the `r32/` directory"
+                                            .to_string(),
+                                    ));
+                                    eng.add_log(LogTypes::Ok(
+                                        "rm: removes a lua file from the `r32/` directory"
                                             .to_string(),
                                     ));
                                     eng.add_log(LogTypes::Ok(
@@ -402,6 +419,32 @@ impl RicoEngine {
                                 Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
                             },
                             Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
+                        },
+                        Commands::Remove(file) => {
+                            match fs::remove_file(PATH.to_string() + &file){
+                                Ok(_) => eng.add_log(LogTypes::Ok(format!("Removed {file}").to_string())),
+                                Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
+                            };
+                        },
+                        Commands::Move(file, file2) => {
+                            let result = (|| -> Result<(), Box<dyn Error>> {
+                                let file_r32 = PATH.to_string() + &file;
+                                let file2_r32 = PATH.to_string() + &file2;
+                                let contents = fs::read(&file_r32)?;
+                                fs::remove_file(&file_r32)?;
+                                if let Some(parent) = Path::new(&file2_r32).parent() {
+                                    fs::create_dir_all(parent)?;
+                                }
+                                fs::write(file2_r32, contents)?;
+                                Ok(())
+                            })();
+
+                            match result {
+                                Err(err) => eng.add_log(LogTypes::Err(err.to_string())),
+                                Ok(_) => eng.add_log(LogTypes::Ok(
+                                    format!("Successfully moved {file} to {file2}").to_string(),
+                                )),
+                            }
                         },
                         Commands::Export(file) => {
                             let file = add_ext(file);
