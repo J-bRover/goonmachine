@@ -2,10 +2,9 @@ use std::{
     cmp::min,
     collections::{HashMap, HashSet},
     error::Error,
-    fs, io,
-    os::unix::fs::MetadataExt,
+    fs,
     path::Path,
-    time::Instant,
+    time::{Instant, SystemTime},
 };
 
 use macro_procs::ScreenEngine;
@@ -48,6 +47,20 @@ struct Change {
     cursor_after: (usize, usize),
 }
 
+struct File {
+    mtime: u64,
+    content: Vec<String>,
+    synced: bool,
+    undo_stack: Vec<Change>,
+    redo_stack: Vec<Change>,
+}
+
+impl File {
+    pub fn new(mtime: u64, content: Vec<String>) -> Self {
+        File { mtime, content, synced: true, undo_stack: Vec::new(), redo_stack: Vec::new() }
+    }
+}
+
 #[derive(ScreenEngine)]
 pub struct IDEEngine {
     pixels: PixelsType,
@@ -57,25 +70,23 @@ pub struct IDEEngine {
     pub mouse: MousePress,
 
     cart_path: String,
-    files: HashMap<String, i64>,
+    files: HashMap<String, File>,
 
     file_name: String,
-    file: Vec<String>,
     cursor: (usize, usize),
     scroll_offset: (usize, usize),
     selection: Option<((usize, usize), (usize, usize))>,
 
-    undo_stack: HashMap<String, Vec<Change>>,
-    redo_stack: HashMap<String, Vec<Change>>,
     clipboard: String,
     frame_hash: i32,
 
     regexes: Vec<Token>,
-
-    upto_date: bool,
 }
 
-fn init_directory(scripts: HashMap<String, String>) -> Result<(), Box<dyn Error>> {
+fn init_directory(
+    scripts: HashMap<String, String>,
+) -> Result<HashMap<String, File>, Box<dyn Error>> {
+    let mut file_contents = HashMap::new();
     if Path::new(PATH).exists() {
         for entry in fs::read_dir(PATH)? {
             let path = entry?.path();
@@ -91,10 +102,14 @@ fn init_directory(scripts: HashMap<String, String>) -> Result<(), Box<dyn Error>
         if let Some(parent) = Path::new(&f_path).parent() {
             fs::create_dir_all(parent)?;
         }
+        let split_contents = content.split("\n").map(|x| x.to_string()).collect();
+        fs::write(&f_path, content)?;
 
-        fs::write(f_path, content)?;
+        let mtime =
+            fs::metadata(&f_path)?.modified()?.duration_since(SystemTime::UNIX_EPOCH)?.as_secs();
+        file_contents.insert(file.clone(), File::new(mtime, split_contents));
     }
-    Ok(())
+    Ok(file_contents)
 }
 
 impl IDEEngine {
@@ -112,14 +127,8 @@ impl IDEEngine {
         let identifier_re = Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*").unwrap();
         let identifier_token = Token(identifier_re, Colors::Silver);
 
-        init_directory(scripts).expect("Could not initialize r32/ directory");
-
+        let contents = init_directory(scripts).expect("Could not initialize r32/ directory");
         let file_name = "main.lua";
-        let contents: Vec<String> = fs::read_to_string(PATH.to_string() + file_name)
-            .expect("Could not find main.lua in cartridge")
-            .split("\n")
-            .map(|x| x.to_string())
-            .collect();
 
         IDEEngine {
             pixels: Colors::pixels(SCREEN_SIZE, SCREEN_SIZE * 2),
@@ -127,15 +136,12 @@ impl IDEEngine {
             last_checked_files: Instant::now(),
             keyboard: Keyboard::default(),
             mouse: MousePress::default(),
-            files: HashMap::new(),
+            files: contents,
             file_name: file_name.to_string(),
-            file: contents,
             cart_path: path,
             cursor: (0, 0),
             scroll_offset: (0, 0),
             selection: None,
-            undo_stack: HashMap::new(),
-            redo_stack: HashMap::new(),
             clipboard: String::new(),
             frame_hash: 0,
             regexes: vec![
@@ -146,14 +152,15 @@ impl IDEEngine {
                 operator_token,
                 identifier_token,
             ],
-            upto_date: true,
         }
     }
 
     pub fn update(&mut self) {
         self.frame_hash = (self.frame_hash + 1) % 24;
-        if self.file.is_empty() {
-            self.file = vec![" ".to_string()]
+        let file =
+            &mut self.files.get_mut(&self.file_name).expect("Unexpected change in files").content;
+        if file.is_empty() {
+            *file = vec![" ".to_string()]
         };
         sync(&mut self.last_time, IDE_FRAME_RATE);
         clear(&mut self.pixels, Colors::Black);
@@ -180,19 +187,33 @@ impl IDEEngine {
                     .to_string_lossy()
                     .to_string()
                     .replace("\\", "/");
-                let cur_mtime = fs::metadata(path)?.mtime();
+                let cur_mtime = fs::metadata(path)?
+                    .modified()?
+                    .duration_since(SystemTime::UNIX_EPOCH)?
+                    .as_secs();
                 cur_files.insert(rel.clone());
 
-                match self.files.get(&rel) {
-                    Some(mtime) => {
-                        if *mtime != cur_mtime {
+                match self.files.get_mut(&rel) {
+                    Some(file) => {
+                        if file.mtime != cur_mtime {
                             changed = true;
-                            self.files.insert(rel, cur_mtime);
+                            let contents = fs::read_to_string(path)
+                                .expect("Sudden change in files")
+                                .split('\n')
+                                .map(|x| x.to_string())
+                                .collect();
+                            *file = File::new(cur_mtime, contents);
+                            file.mtime = cur_mtime;
                         }
                     }
                     None => {
                         changed = true;
-                        self.files.insert(rel, cur_mtime);
+                        let contents = fs::read_to_string(path)
+                            .expect("Sudden change in files")
+                            .split('\n')
+                            .map(|x| x.to_string())
+                            .collect();
+                        self.files.insert(rel, File::new(cur_mtime, contents));
                     }
                 }
             }
@@ -209,40 +230,38 @@ impl IDEEngine {
                 if key == self.file_name {
                     self.file_name = "main.lua".to_string();
                     self.cursor = (0, 0);
-                    self.file = fs::read_to_string(PATH.to_string() + &self.file_name)
-                        .expect("Could not find main.lua in cartridge")
-                        .split("\n")
-                        .map(|x| x.to_string())
-                        .collect();
                 }
             }
 
             if changed {
-                let mut cart = get_cart(&self.cart_path)?;
-                cart.scripts = self
-                    .files
-                    .keys()
-                    .map(|key| {
-                        let contents = fs::read_to_string(PATH.to_string() + key)
-                            .expect("Sudden change in files");
-                        if *key == self.file_name {
-                            self.file = contents.split("\n").map(|x| x.to_string()).collect();
-                            let out_of_scope = self
-                                .file
-                                .get(self.cursor.1)
-                                .map_or_else(|| true, |line| line.len() < self.cursor.0);
-                            if out_of_scope {
-                                self.cursor = (0, 0);
-                            }
-                            self.upto_date = true;
-                        }
-                        (key.clone(), contents)
-                    })
-                    .collect();
-                write_cart(&self.cart_path, &cart)?;
+                self.update_cart()?;
             }
         };
 
+        Ok(())
+    }
+
+    fn update_cart(&mut self) -> Result<(), Box<dyn Error>> {
+        let mut cart = get_cart(&self.cart_path)?;
+        cart.scripts = self
+            .files
+            .keys()
+            .map(|key| {
+                let contents =
+                    fs::read_to_string(PATH.to_string() + key).expect("Sudden change in files");
+                if *key == self.file_name {
+                    let out_of_scope = self.files[key]
+                        .content
+                        .get(self.cursor.1)
+                        .map_or_else(|| true, |line| line.len() < self.cursor.0);
+                    if out_of_scope {
+                        self.cursor = (0, 0);
+                    }
+                }
+                (key.clone(), contents)
+            })
+            .collect();
+        write_cart(&self.cart_path, &cart)?;
         Ok(())
     }
 
@@ -258,7 +277,9 @@ impl IDEEngine {
                 }
                 let y = (row - self.scroll_offset.1) as i32 * TEXT_HEIGHT + 1;
 
-                let line = &self.file[row];
+                let file =
+                    &self.files.get(&self.file_name).expect("Unexpected change in files").content;
+                let line = &file[row];
                 let sel_start_col = if row == start.1 { start.0 } else { 0 };
                 let sel_end_col = if row == end.1 { end.0 } else { line.len() };
 
@@ -272,7 +293,8 @@ impl IDEEngine {
             }
         }
 
-        for (row_idx, line) in self.file.iter().enumerate().skip(self.scroll_offset.1) {
+        let file = &self.files.get(&self.file_name).expect("Unexpected change in files").content;
+        for (row_idx, line) in file.iter().enumerate().skip(self.scroll_offset.1) {
             let y = (row_idx - self.scroll_offset.1) as i32 * TEXT_HEIGHT + 1;
             if y >= TEXT_SPACE as i32 {
                 break;
@@ -298,10 +320,11 @@ impl IDEEngine {
 
         rect_fill(&mut self.pixels, 0, TEXT_SPACE as i32, SCREEN_SIZE as i32, 7, Colors::Silver);
         let curr_line = self.cursor.1 + 1;
-        let total_lines = self.file.len();
+        let file = self.files.get(&self.file_name).expect("Unexpected change in files");
+        let total_lines = file.content.len();
         let mut name = self.file_name.clone();
 
-        if !self.upto_date {
+        if !file.synced {
             name.push('*');
         }
 
@@ -313,30 +336,29 @@ impl IDEEngine {
             format!("{name} LINE {curr_line}/{total_lines}").to_string(),
         );
 
-        let mut files = self.files.keys().collect::<Vec<&String>>();
-        files.sort();
-        for (i, key) in files.iter().enumerate() {
+        let mut files = self.files.iter().collect::<Vec<(&String, &File)>>();
+        files.sort_by_key(|f| f.0.clone());
+        for (i, (name, file)) in files.iter().enumerate() {
             let file_y_start = TEXT_SPACE as i32 + 12 + i as i32 * 5;
             let file_y_end = file_y_start + 5;
+            let mut name_added = name.to_string();
+
+            if !file.synced {
+                name_added.push('*');
+            }
+
             print_scr_mini(
                 &mut self.pixels,
                 1,
                 file_y_start,
                 Colors::Silver,
-                key.to_string().to_uppercase(),
+                name_added.to_uppercase(),
             );
 
             if self.mouse.just_pressed && self.mouse.y >= file_y_start && self.mouse.y < file_y_end
             {
-                self.file_name = key.to_string();
+                self.file_name = name.to_string();
                 self.cursor = (0, 0);
-                self.file = fs::read_to_string(PATH.to_string() + &self.file_name)
-                    .unwrap_or_else(|_| {
-                        panic!("{}", format!("Could not find {key} in cartridge").to_string())
-                    })
-                    .split("\n")
-                    .map(|x| x.to_string())
-                    .collect();
             }
         }
 
@@ -363,9 +385,15 @@ impl IDEEngine {
         }
     }
 
-    fn save(&mut self) -> io::Result<()> {
-        self.upto_date = true;
-        fs::write(PATH.to_string() + &self.file_name, self.file.join("\n"))
+    fn save(&mut self) -> Result<(), Box<dyn Error>> {
+        let file = self.files.get_mut(&self.file_name).expect("Unexpected change in files");
+        let path = PATH.to_string() + &self.file_name;
+        fs::write(&path, file.content.join("\n"))?;
+        let mtime =
+            fs::metadata(&path)?.modified()?.duration_since(SystemTime::UNIX_EPOCH)?.as_secs();
+        file.synced = true;
+        file.mtime = mtime;
+        self.update_cart()
     }
 
     fn render_cursor(&mut self) {
@@ -467,27 +495,47 @@ impl IDEEngine {
                         self.cursor.0 -= 1;
                     } else if self.cursor.1 > 0 {
                         self.cursor.1 -= 1;
-                        self.cursor.0 = self.file[self.cursor.1].len();
+                        let file = &self
+                            .files
+                            .get(&self.file_name)
+                            .expect("Unexpected change in files")
+                            .content;
+                        self.cursor.0 = file[self.cursor.1].len();
                     }
                 }
                 VirtualKeyCode::Right => {
-                    if self.cursor.0 < self.file[self.cursor.1].len() {
+                    let file = &self
+                        .files
+                        .get(&self.file_name)
+                        .expect("Unexpected change in files")
+                        .content;
+                    if self.cursor.0 < file[self.cursor.1].len() {
                         self.cursor.0 += 1;
-                    } else if self.cursor.1 < self.file.len() - 1 {
+                    } else if self.cursor.1 < file.len() - 1 {
                         self.cursor.1 += 1;
                         self.cursor.0 = 0;
                     }
                 }
                 VirtualKeyCode::Up => {
+                    let file = &self
+                        .files
+                        .get(&self.file_name)
+                        .expect("Unexpected change in files")
+                        .content;
                     if self.cursor.1 > 0 {
                         self.cursor.1 -= 1;
-                        self.cursor.0 = min(self.cursor.0, self.file[self.cursor.1].len());
+                        self.cursor.0 = min(self.cursor.0, file[self.cursor.1].len());
                     }
                 }
                 VirtualKeyCode::Down => {
-                    if self.cursor.1 < self.file.len() - 1 {
+                    let file = &self
+                        .files
+                        .get(&self.file_name)
+                        .expect("Unexpected change in files")
+                        .content;
+                    if self.cursor.1 < file.len() - 1 {
                         self.cursor.1 += 1;
-                        self.cursor.0 = min(self.cursor.0, self.file[self.cursor.1].len());
+                        self.cursor.0 = min(self.cursor.0, file[self.cursor.1].len());
                     }
                 }
                 VirtualKeyCode::Back => {
@@ -496,17 +544,22 @@ impl IDEEngine {
                         self.clipboard.clear();
                     } else {
                         let cursor_before = self.cursor;
+                        let file = &mut self
+                            .files
+                            .get_mut(&self.file_name)
+                            .expect("Unexpected change in files")
+                            .content;
                         let (deleted_text, deleted_start) = if self.cursor.0 > 0 {
                             let (col, row) = self.cursor;
-                            let text = self.file[row][col - 1..col].to_string();
-                            self.file[row].remove(col - 1);
+                            let text = file[row][col - 1..col].to_string();
+                            file[row].remove(col - 1);
                             self.cursor.0 -= 1;
                             (text, (col - 1, row))
                         } else if self.cursor.1 > 0 {
-                            let line = self.file.remove(self.cursor.1);
+                            let line = file.remove(self.cursor.1);
                             self.cursor.1 -= 1;
-                            self.cursor.0 = self.file[self.cursor.1].len();
-                            self.file[self.cursor.1].push_str(&line);
+                            self.cursor.0 = file[self.cursor.1].len();
+                            file[self.cursor.1].push_str(&line);
                             ("\n".to_string(), (self.cursor.0, self.cursor.1))
                         } else {
                             continue;
@@ -531,10 +584,15 @@ impl IDEEngine {
 
                     let added_start = self.cursor;
                     let (col, row) = self.cursor;
-                    let line = &self.file[row];
+                    let file = &mut self
+                        .files
+                        .get_mut(&self.file_name)
+                        .expect("Unexpected change in files")
+                        .content;
+                    let line = &file[row];
                     let new_line = line[col..].to_string();
-                    self.file[row].truncate(col);
-                    self.file.insert(row + 1, new_line);
+                    file[row].truncate(col);
+                    file.insert(row + 1, new_line);
                     self.cursor = (0, row + 1);
 
                     self.push_undo(Change {
@@ -594,30 +652,49 @@ impl IDEEngine {
                     });
                 }
                 VirtualKeyCode::Z => {
-                    if let Some(change) =
-                        self.undo_stack.get_mut(&self.file_name).and_then(|v| v.pop())
-                    {
+                    let file =
+                        &mut self.files.get_mut(&self.file_name).expect("Couldn't load file");
+                    if let Some(change) = file.undo_stack.pop() {
                         self.apply_change(&change.added_text, change.added_start, true);
                         self.apply_change(&change.deleted_text, change.deleted_start, false);
                         self.cursor = change.cursor_before;
-                        self.redo_stack.entry(self.file_name.clone()).or_default().push(change);
+                        {
+                            let file = &mut self
+                                .files
+                                .get_mut(&self.file_name)
+                                .expect("Couldn't load file");
+                            file.synced = false;
+                            file.redo_stack.push(change);
+                        }
                     }
                 }
                 VirtualKeyCode::R => {
-                    if let Some(change) =
-                        self.redo_stack.get_mut(&self.file_name).and_then(|v| v.pop())
-                    {
+                    let file =
+                        &mut self.files.get_mut(&self.file_name).expect("Couldn't load file");
+                    if let Some(change) = file.redo_stack.pop() {
                         self.apply_change(&change.deleted_text, change.deleted_start, true);
                         self.apply_change(&change.added_text, change.added_start, false);
                         self.cursor = change.cursor_after;
-                        self.undo_stack.entry(self.file_name.clone()).or_default().push(change);
+                        {
+                            let file = &mut self
+                                .files
+                                .get_mut(&self.file_name)
+                                .expect("Couldn't load file");
+                            file.synced = false;
+                            file.undo_stack.push(change);
+                        }
                     }
                 }
                 VirtualKeyCode::C => self.clipboard = self.get_selection_text(),
                 VirtualKeyCode::X => self.cut_selection(),
                 VirtualKeyCode::A => {
-                    let end_row = self.file.len() - 1;
-                    let end_col = self.file[end_row].len();
+                    let file = &self
+                        .files
+                        .get(&self.file_name)
+                        .expect("Unexpected change in files")
+                        .content;
+                    let end_row = file.len() - 1;
+                    let end_col = file[end_row].len();
                     self.selection = Some(((0, 0), (end_col, end_row)));
                     self.cursor = (end_col, end_row);
                 }
@@ -657,9 +734,10 @@ impl IDEEngine {
     }
 
     fn push_undo(&mut self, change: Change) {
-        self.upto_date = false;
-        self.undo_stack.entry(self.file_name.clone()).or_default().push(change);
-        self.redo_stack.remove(&self.file_name);
+        let file = &mut self.files.get_mut(&self.file_name).expect("Please");
+        file.synced = false;
+        file.undo_stack.push(change);
+        file.redo_stack.clear();
     }
 
     fn apply_change(&mut self, text: &str, start: (usize, usize), is_delete: bool) {
@@ -677,18 +755,19 @@ impl IDEEngine {
     }
 
     fn get_selection_text(&self) -> String {
+        let file = &self.files.get(&self.file_name).expect("Unexpected change in files").content;
         if let Some((start, end)) = self.get_sorted_selection() {
             if start.1 == end.1 {
-                self.file[start.1][start.0..end.0].to_string()
+                file[start.1][start.0..end.0].to_string()
             } else {
                 let mut text = String::new();
-                text.push_str(&self.file[start.1][start.0..]);
+                text.push_str(&file[start.1][start.0..]);
                 text.push('\n');
-                for row in (start.1 + 1)..end.1 {
-                    text.push_str(&self.file[row]);
+                for line in file.iter().take(end.1).skip(start.1 + 1) {
+                    text.push_str(line);
                     text.push('\n');
                 }
-                text.push_str(&self.file[end.1][..end.0]);
+                text.push_str(&file[end.1][..end.0]);
                 text
             }
         } else {
@@ -729,17 +808,19 @@ impl IDEEngine {
     }
 
     fn delete_range(&mut self, start: (usize, usize), end: (usize, usize)) {
+        let file =
+            &mut self.files.get_mut(&self.file_name).expect("Unexpected change in files").content;
         if start.1 == end.1 {
-            self.file[start.1].drain(start.0..end.0);
+            file[start.1].drain(start.0..end.0);
         } else {
-            let end_line_content = self.file[end.1][end.0..].to_string();
-            self.file[start.1].truncate(start.0);
-            self.file[start.1].push_str(&end_line_content);
+            let end_line_content = file[end.1][end.0..].to_string();
+            file[start.1].truncate(start.0);
+            file[start.1].push_str(&end_line_content);
 
             let start_line = start.1 + 1;
             let end_line = end.1;
             if start_line <= end_line {
-                self.file.drain(start_line..=end_line);
+                file.drain(start_line..=end_line);
             }
         }
     }
@@ -756,19 +837,21 @@ impl IDEEngine {
         let lines: Vec<&str> = text.split('\n').collect();
         let (col, row) = pos;
 
+        let file =
+            &mut self.files.get_mut(&self.file_name).expect("Unexpected change in files").content;
         if lines.len() == 1 {
-            self.file[row].insert_str(col, lines[0]);
+            file[row].insert_str(col, lines[0]);
         } else {
-            let rest_of_line = self.file[row][col..].to_string();
-            self.file[row].truncate(col);
-            self.file[row].push_str(lines[0]);
+            let rest_of_line = file[row][col..].to_string();
+            file[row].truncate(col);
+            file[row].push_str(lines[0]);
 
             for (i, line) in lines.iter().enumerate().skip(1) {
-                self.file.insert(row + i, line.to_string());
+                file.insert(row + i, line.to_string());
             }
 
             let last_line_index = row + lines.len() - 1;
-            self.file[last_line_index].push_str(&rest_of_line);
+            file[last_line_index].push_str(&rest_of_line);
         }
     }
 
