@@ -40,11 +40,17 @@ pub struct TerminalEngine {
 
 impl Default for TerminalEngine {
     fn default() -> Self {
+        let initial_logs = vec![
+            LogTypes::Ok("The RICO-32 Terminal".to_string()),
+            LogTypes::Ok("".to_string()),
+            LogTypes::Ok("Type help for command list".to_string()),
+            LogTypes::Ok("".to_string()),
+        ];
         TerminalEngine {
             pixels: Colors::pixels(SCREEN_SIZE, SCREEN_SIZE * 2),
             last_time: Instant::now(),
             commands: Vec::new(),
-            logs: Vec::new(),
+            logs: initial_logs,
             input: String::new(),
             cursor: 0,
             frame_hash: 0,
@@ -124,6 +130,61 @@ impl TerminalEngine {
         self.cursor += 1;
     }
 
+    fn handle_inputs(&mut self) -> bool {
+        if self.frame_hash % 3 == 0 {
+            for key in self.keyboard.keys_pressed.clone() {
+                match key {
+                    VirtualKeyCode::Right => self.cursor = (self.cursor + 1).min(self.input.len()),
+                    VirtualKeyCode::Left => {
+                        if self.cursor != 0 {
+                            self.cursor -= 1;
+                        }
+                    }
+                    VirtualKeyCode::Back => {
+                        if self.cursor != 0 {
+                            self.input.remove(self.cursor - 1);
+                            self.cursor -= 1;
+                        }
+                    }
+                    VirtualKeyCode::Return => {
+                        let cmd = self.input.clone();
+                        self.add_log(LogTypes::Action("> ".to_string() + &cmd));
+
+                        match self.parse_command(&cmd) {
+                            Ok(cmd) => self.commands.push(cmd),
+                            Err(err) => self.add_log(LogTypes::Err(err.to_string())),
+                        }
+
+                        self.input.clear();
+                        self.cursor = 0;
+                    }
+                    _ => {}
+                };
+            }
+        }
+
+        self.keyboard.keys_pressed.iter().any(|k| {
+            matches!(
+                k,
+                VirtualKeyCode::Right
+                    | VirtualKeyCode::Left
+                    | VirtualKeyCode::Back
+                    | VirtualKeyCode::Return
+            )
+        })
+    }
+
+    fn render_cursor(&mut self) {
+        rect_fill(
+            &mut self.pixels,
+            4 * (self.cursor as i32 + 2),
+            SCREEN_SIZE as i32 * 2 - 6,
+            1,
+            5,
+            Colors::Red,
+        );
+    }
+
     pub fn update(&mut self) {
         self.frame_hash += 1;
         self.frame_hash %= 20;
@@ -132,61 +193,24 @@ impl TerminalEngine {
 
         self.commands.clear();
 
-        for key in self.keyboard.keys_just_pressed.clone() {
-            match key {
-                VirtualKeyCode::Up | VirtualKeyCode::Down => continue,
-                VirtualKeyCode::Right => self.cursor = (self.cursor + 1).min(self.input.len()),
-                VirtualKeyCode::Left => {
-                    if self.cursor != 0 {
-                        self.cursor -= 1;
-                    }
-                }
-                VirtualKeyCode::Back => {
-                    if self.cursor != 0 {
-                        self.input.remove(self.cursor - 1);
-                        self.cursor -= 1;
-                    }
-                }
-                VirtualKeyCode::Return => {
-                    let cmd = self.input.clone();
-                    self.add_log(LogTypes::Action(">".to_string() + &cmd));
-
-                    match self.parse_command(&cmd) {
-                        Ok(cmd) => self.commands.push(cmd),
-                        Err(err) => self.add_log(LogTypes::Err(err.to_string())),
-                    }
-
-                    self.input.clear();
-                    self.cursor = 0;
-                }
-                _ => {}
-            };
-        }
-
         for (i, log) in self.logs[self.logs.len().saturating_sub(38)..].iter().enumerate() {
             let col = match log {
                 LogTypes::Err(_) => Colors::Maroon,
                 LogTypes::Ok(_) => Colors::White,
                 LogTypes::Action(_) => Colors::Silver,
             };
-            print_scr_mid(&mut self.pixels, 1, 6 * i as i32 + 20, col, log.to_string());
-        }
-        if self.frame_hash > 10 {
-            rect_fill(
-                &mut self.pixels,
-                1 + 4 * self.cursor as i32,
-                SCREEN_SIZE as i32 * 2 - 6,
-                1,
-                5,
-                Colors::White,
-            );
+            print_scr_mid(&mut self.pixels, 1, 6 * i as i32 + 6, col, log.to_string());
         }
         print_scr_mid(
             &mut self.pixels,
             1,
             SCREEN_SIZE as i32 * 2 - 6,
             Colors::White,
-            self.input.to_string(),
+            "> ".to_string() + &self.input,
         );
+
+        if self.handle_inputs() || self.frame_hash > 10 {
+            self.render_cursor();
+        };
     }
 }

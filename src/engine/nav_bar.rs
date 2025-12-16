@@ -30,7 +30,7 @@ impl NavEngine {
     }
 
     pub fn update(&mut self) {
-        clear(&mut self.pixels, Colors::Gray);
+        clear(&mut self.pixels, Colors::Silver);
         let mut cur_x = 1;
         if self.just_switched {
             self.just_switched = false
@@ -55,7 +55,7 @@ impl NavEngine {
                     8,
                     Colors::Black,
                 );
-                print_scr_mid(&mut self.pixels, cur_x + 2, 2, Colors::White, option.to_string());
+                print_scr_mid(&mut self.pixels, cur_x + 2, 2, Colors::Silver, option.to_string());
             } else {
                 print_scr_mid(&mut self.pixels, cur_x + 2, 2, Colors::Black, option.to_string());
             }

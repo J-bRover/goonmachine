@@ -313,14 +313,15 @@ impl SpriteEngine {
     fn tool_button(&mut self, x: i32, y: i32, tool: Tools) {
         draw(&mut self.pixels, x + 1, y + 1, &image_from_tool(tool));
 
-        if self.mouse.just_pressed
-            && self.mouse.x != -1
-            && self.mouse.x >= x
+        if self.mouse.x >= x
             && self.mouse.x < x + BUTTON_WIDTH
             && self.mouse.y >= y
             && self.mouse.y < y + BUTTON_WIDTH
         {
-            self.tool = tool;
+            rect(&mut self.pixels, x, y, BUTTON_WIDTH - 1, BUTTON_WIDTH - 1, Colors::Silver);
+            if self.mouse.just_pressed {
+                self.tool = tool;
+            }
         }
 
         if self.tool == tool {
@@ -331,19 +332,21 @@ impl SpriteEngine {
     fn color_button(&mut self, x: i32, y: i32, col: Colors) {
         rect_fill(&mut self.pixels, x + 1, y + 1, BUTTON_WIDTH - 1, BUTTON_WIDTH - 1, col);
 
-        if self.mouse.just_pressed
-            && self.mouse.x != -1
+        rect(&mut self.pixels, x, y, BUTTON_WIDTH - 1, BUTTON_WIDTH - 1, Colors::Gray);
+        if self.selected_color == col {
+            rect(&mut self.pixels, x, y, BUTTON_WIDTH - 1, BUTTON_WIDTH - 1, Colors::White);
+        }
+
+        if self.mouse.x != -1
             && self.mouse.x >= x
             && self.mouse.x < x + BUTTON_WIDTH
             && self.mouse.y >= y
             && self.mouse.y < y + BUTTON_WIDTH
         {
-            self.selected_color = col;
-        }
-
-        rect(&mut self.pixels, x, y, BUTTON_WIDTH - 1, BUTTON_WIDTH - 1, Colors::Gray);
-        if self.selected_color == col {
-            rect(&mut self.pixels, x, y, BUTTON_WIDTH - 1, BUTTON_WIDTH - 1, Colors::White);
+            rect_fill(&mut self.pixels, x, y, BUTTON_WIDTH, BUTTON_WIDTH, col);
+            if self.mouse.just_pressed {
+                self.selected_color = col;
+            }
         }
     }
 
@@ -434,13 +437,15 @@ impl SpriteEngine {
     fn util_button(&mut self, x: i32, y: i32, util: Utils) {
         draw(&mut self.pixels, x + 1, y + 1, &image_from_util(util));
 
-        if self.mouse.just_pressed
-            && self.mouse.x != -1
-            && self.mouse.x >= x
+        if self.mouse.x >= x
             && self.mouse.x < x + BUTTON_WIDTH
             && self.mouse.y >= y
             && self.mouse.y < y + BUTTON_WIDTH
         {
+            rect(&mut self.pixels, x, y, BUTTON_WIDTH - 1, BUTTON_WIDTH - 1, Colors::Silver);
+            if !self.mouse.just_pressed {
+                return;
+            }
             match util {
                 Utils::FlipVert => {
                     if self.moving_selection_content.is_some() {
@@ -529,7 +534,6 @@ impl SpriteEngine {
         rect(&mut self.pixels, x, y, SPRITE_PREVIEW_SIZE, SPRITE_PREVIEW_SIZE, Colors::Gray);
 
         if self.mouse.just_pressed
-            && self.mouse.x != -1
             && self.mouse.x >= x
             && self.mouse.x < x + SPRITE_PREVIEW_SIZE
             && self.mouse.y >= y
@@ -600,23 +604,32 @@ impl SpriteEngine {
             Colors::Gray,
         );
 
+        if self.mouse.x >= add_x
+            && self.mouse.x < add_x + ADD_SPRITE_BUTTON_SIZE
+            && self.mouse.y > ADD_SPRITE_BUTTON_Y
+            && self.mouse.y < ADD_SPRITE_BUTTON_Y + ADD_SPRITE_BUTTON_SIZE
+        {
+            rect_fill(
+                &mut self.pixels,
+                add_x,
+                ADD_SPRITE_BUTTON_Y,
+                ADD_SPRITE_BUTTON_SIZE,
+                ADD_SPRITE_BUTTON_SIZE,
+                Colors::Silver,
+            );
+            if self.mouse.just_pressed {
+                let adding = vec![Colors::pixels(SPRITE_SIZE, SPRITE_SIZE); SPRITES_TO_ADD];
+                self.sprite_sheet.extend(adding);
+                let p = self.cart_path.clone();
+                let _ = update_sprites(&p, &self.sprite_sheet);
+            }
+        }
+
         for y in ADD_SPRITE_BUTTON_Y + 2..ADD_SPRITE_BUTTON_Y + 7 {
             set_pix(&mut self.pixels, y, add_x + 4, Colors::Black);
         }
         for x in 2..7 {
             set_pix(&mut self.pixels, ADD_SPRITE_BUTTON_Y + 4, add_x + x, Colors::Black);
-        }
-
-        if self.mouse.just_pressed
-            && self.mouse.x >= add_x
-            && self.mouse.x < add_x + ADD_SPRITE_BUTTON_SIZE
-            && self.mouse.y > ADD_SPRITE_BUTTON_Y
-            && self.mouse.y < ADD_SPRITE_BUTTON_Y + ADD_SPRITE_BUTTON_SIZE
-        {
-            let adding = vec![Colors::pixels(SPRITE_SIZE, SPRITE_SIZE); SPRITES_TO_ADD];
-            self.sprite_sheet.extend(adding);
-            let p = self.cart_path.clone();
-            let _ = update_sprites(&p, &self.sprite_sheet);
         }
     }
 
@@ -627,10 +640,7 @@ impl SpriteEngine {
         //clear(&mut self.pixels, COLORS::GRAY);
 
         // rect(&mut self.pixels, 14, 8, COLOR_BUTTON_WIDTH*8 + 3, COLOR_BUTTON_WIDTH * 2 + 3, COLORS::WHITE);
-        for (i, col) in ALL_COLORS.iter().enumerate() {
-            if *col == Colors::Blank {
-                continue;
-            }
+        for (i, col) in ALL_COLORS.iter().enumerate().skip(1) {
             let idx = i as i32 - 1;
             self.color_button(
                 CANVAS_X + (idx % COLORS_PER_ROW) * BUTTON_WIDTH,
