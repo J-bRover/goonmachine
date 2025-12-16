@@ -230,7 +230,9 @@ impl RicoEngine {
                                 bind_mouse_input(&mut eng.mouse, button, state);
                             }
                             StateEngines::Terminal(_) => {}
-                            StateEngines::Ide(_) => {}
+                            StateEngines::Ide(ref mut eng) => {
+                                bind_mouse_input(&mut eng.mouse, button, state);
+                            }
                         };
                     }
 
@@ -278,7 +280,16 @@ impl RicoEngine {
                                 );
                             }
                             StateEngines::Terminal(_) => {}
-                            StateEngines::Ide(_) => {}
+                            StateEngines::Ide(ref mut eng) => {
+                                bind_mouse_move(
+                                    &mut eng.mouse,
+                                    logical,
+                                    0,
+                                    NAV_BAR_HEIGHT * SCALE,
+                                    WINDOW_WIDTH,
+                                    WINDOW_WIDTH * 2,
+                                );
+                            }
                         }
                     }
 
@@ -293,6 +304,11 @@ impl RicoEngine {
     pub fn update(&mut self, buffer: &mut [u8]) {
         self.nav_engine.update();
         handle_engine_update(buffer, &mut self.nav_engine, 0, 0);
+        
+        //IDE should look for and update scripts from external IDEs regardless of screen 
+        if let Some(StateEngines::Ide(ref mut eng)) = self.state_engines.get_mut(2) {
+            let _ = eng.update_files();
+        }
 
         let engine = &mut self.state_engines[self.nav_engine.selected];
 

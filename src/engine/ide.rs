@@ -13,13 +13,11 @@ use walkdir::WalkDir;
 use winit::event::VirtualKeyCode;
 
 use crate::{
-    engine::{
-        rico::{PixelsType, ScreenEngine, SCREEN_SIZE},
-    },
-    input::{keyboard::Keyboard},
+    engine::rico::{PixelsType, ScreenEngine, SCREEN_SIZE},
+    input::{keyboard::Keyboard, mouse::MousePress},
     render::{
         colors::Colors,
-        pixels::{clear, print_scr_mid, rect_fill},
+        pixels::{clear, draw, print_scr_mid, print_scr_mini, rect_fill},
     },
     scripting::cartridge::{get_cart, write_cart, PATH},
     time::sync,
@@ -27,9 +25,19 @@ use crate::{
 use regex::Regex;
 
 const IDE_FRAME_RATE: i32 = 30;
-const TEXT_SPACE: usize = (SCREEN_SIZE as f32 * 1.5) as usize;
+const TEXT_SPACE: usize = (SCREEN_SIZE as f32 * 1.4) as usize;
 const TEXT_HEIGHT: i32 = 6;
 const TEXT_WIDTH: i32 = 4;
+
+const N: Colors = Colors::Blank;
+const B: Colors = Colors::Black;
+const ADD_BUTTON: [[Colors; 5]; 5] = [
+    [N, N, B, N, N],
+    [N, N, B, N, N],
+    [B, B, B, B, B],
+    [N, N, B, N, N],
+    [N, N, B, N, N],
+];
 
 struct Token(Regex, Colors);
 
@@ -51,6 +59,7 @@ pub struct IDEEngine {
     last_time: Instant,
     last_checked_files: Instant,
     pub keyboard: Keyboard,
+    pub mouse: MousePress,
 
     cart_path: String,
     files: HashMap<String, i64>,
@@ -122,6 +131,7 @@ impl IDEEngine {
             last_time: Instant::now(),
             last_checked_files: Instant::now(),
             keyboard: Keyboard::default(),
+            mouse: MousePress::default(),
             files: HashMap::new(),
             file_name: file_name.to_string(),
             file: contents,
@@ -147,16 +157,16 @@ impl IDEEngine {
 
     pub fn update(&mut self) {
         self.frame_hash = (self.frame_hash + 1) % 24;
+        if self.file.is_empty() { self.file = vec![" ".to_string()] };
         sync(&mut self.last_time, IDE_FRAME_RATE);
         clear(&mut self.pixels, Colors::Black);
 
-        let _ = self.update_files();
         self.scroll_to_cursor();
         self.render();
         self.handle_input();
     }
 
-    fn update_files(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn update_files(&mut self) -> Result<(), Box<dyn Error>> {
         if self.last_checked_files.elapsed().as_millis() >= 500 {
             self.last_checked_files = Instant::now();
             let mut changed = false;
@@ -199,6 +209,15 @@ impl IDEEngine {
 
             for key in keys_to_remove {
                 self.files.remove(&key);
+                if key == self.file_name {
+                    self.file_name = "main.lua".to_string();
+                    self.cursor = (0, 0);
+                    self.file = fs::read_to_string(PATH.to_string() + &self.file_name)
+                        .expect("Could not find main.lua in cartridge")
+                        .split("\n")
+                        .map(|x| x.to_string())
+                        .collect();
+                }
             }
 
             if changed {
@@ -214,7 +233,7 @@ impl IDEEngine {
                             let out_of_scope = self
                                 .file
                                 .get(self.cursor.1)
-                                .map_or_else(|| true, |line| line.len() <= self.cursor.0);
+                                .map_or_else(|| true, |line| line.len() < self.cursor.0);
                             if out_of_scope {
                                 self.cursor = (0, 0);
                             }
@@ -296,6 +315,41 @@ impl IDEEngine {
             Colors::Black,
             format!("{name} LINE {curr_line}/{total_lines}").to_string(),
         );
+
+        let mut files = self.files.keys().collect::<Vec<&String>>();
+        files.sort();
+        for (i, key) in files.iter().enumerate() {
+            let file_y_start = TEXT_SPACE as i32 + 12 + i as i32 * 5;
+            let file_y_end = file_y_start + 5;
+            print_scr_mini(&mut self.pixels, 1, file_y_start, Colors::Silver, key.to_string().to_uppercase());
+
+            if self.mouse.just_pressed && self.mouse.y >= file_y_start && self.mouse.y < file_y_end {
+                self.file_name = key.to_string();
+                self.cursor = (0, 0);
+                self.file = fs::read_to_string(PATH.to_string() + &self.file_name)
+                    .expect(&format!("Could not find {key} in cartridge").to_string())
+                    .split("\n")
+                    .map(|x| x.to_string())
+                    .collect();
+            }
+        }
+
+        self.add_button();
+    }
+
+    fn add_button(&mut self) {
+        let y = TEXT_SPACE as i32 + 12 + (self.files.len() as i32) * 5 + 1;
+        rect_fill(&mut self.pixels, 1, y, 7, 7, Colors::Silver);
+        draw(&mut self.pixels, 2, y+1, &ADD_BUTTON);
+
+        if self.mouse.just_pressed && self.mouse.y >= y && self.mouse.y < y + 7 && self.mouse.x >= 1 && self.mouse.x < 8 {
+            let f_path = PATH.to_owned() + &self.files.len().to_string() + ".lua";
+            if let Some(parent) = Path::new(&f_path).parent() {
+                fs::create_dir_all(parent).expect("Error writing to file");
+            }
+
+            fs::write(f_path, " ").expect("Error writing to file");
+        }
     }
 
     fn save(&mut self) -> io::Result<()> {
