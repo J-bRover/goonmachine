@@ -11,7 +11,7 @@ default-run = "rico-32"
 winres = "0.1"
 
 [dependencies]
-macro_procs = { path = "./macro_procs", version = "0.1.0" }
+macros = { path = "./macros", version = "0.1.0" }
 winit = "0.28"
 pixels = "0.12"
 mlua = {version = "0.11.4", features = ["lua54", "vendored"] }

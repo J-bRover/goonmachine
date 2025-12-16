@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use macro_procs::ScreenEngine;
+use macros::ScreenEngine;
 
 use crate::{
     engine::rico::{PixelsType, ScreenEngine, SCREEN_SIZE},

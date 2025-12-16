@@ -1058,7 +1058,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "macro_procs"
+name = "macros"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",
@@ -1806,7 +1806,7 @@ dependencies = [
  "bincode",
  "flate2",
  "image",
- "macro_procs",
+ "macros",
  "mlua",
  "pixels",
  "rayon",
