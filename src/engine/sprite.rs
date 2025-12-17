@@ -399,6 +399,14 @@ impl SpriteEngine {
         }
     }
 
+    fn handle_shortcuts(&mut self) {
+        if self.keyboard.keys_pressed.contains(&VirtualKeyCode::LControl)
+            && self.keyboard.keys_pressed.contains(&VirtualKeyCode::S)
+        {
+            self.save();
+        }
+    }
+
     fn handle_copy_paste(&mut self) {
         if self.keyboard.keys_pressed.contains(&VirtualKeyCode::LControl)
             && self.keyboard.keys_just_pressed.contains(&VirtualKeyCode::C)
@@ -507,12 +515,16 @@ impl SpriteEngine {
                     }
                 }
                 Utils::Save => {
-                    self.upto_date = true;
-                    let p = self.cart_path.clone();
-                    let _ = update_sprites(&p, &self.sprite_sheet);
+                    self.save();
                 }
             }
         }
+    }
+
+    fn save(&mut self) {
+        self.upto_date = true;
+        let p = self.cart_path.clone();
+        let _ = update_sprites(&p, &self.sprite_sheet);
     }
 
     fn sprite_small(&mut self, idx: i32, true_idx: i32) {
@@ -669,6 +681,7 @@ impl SpriteEngine {
         self.handle_copy_paste();
 
         self.handle_undo_redo();
+        self.handle_shortcuts();
         self.draw_sprite_sheet();
 
         if !self.new_changes.is_empty() {

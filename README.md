@@ -160,7 +160,7 @@ RICO-32 includes a built-in sprite editor for creating and managing 32×32 pixel
 2. **Choose a tool**: Click one of the tool buttons (Pencil, Eraser, Fill, Select)
 3. **Pick a color**: Click a color from the palette at the top
 4. **Draw**: Click and drag on the canvas to draw or use tools
-5. **Save**: Click the save button to persist changes to disk
+5. **Save**: Click the save button or use Ctrl+S to persist changes to disk
 
 ### Adding More Sprites
 
