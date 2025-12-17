@@ -46,7 +46,7 @@ The console is designed to be simple yet powerful, allowing developers to create
 - **16-Color Palette**: Predefined color palette for consistent retro aesthetics
 - **Lua Scripting**: Full Lua 5.4 support with custom module system. Only safe Lua features are enabled, allowing for security when running external cartridges.
 - **Built-in Console**: Integrated console engine for logging and debugging
-- **Sprite Support**: Create custom 32x32 sprites within the console and use and load them in the game
+- **Sprite Support**: Create custom 16x16 sprites within the console and use and load them in the game
 - **Built-in IDE**: Edit your Lua scripts with syntax highlighting without leaving the console.
 - **Input Handling**: Mouse and keyboard input with frame-accurate state tracking
 - **Frame Rate Control**: Configurable frame rate with delta time support
