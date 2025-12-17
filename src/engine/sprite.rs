@@ -34,10 +34,10 @@ pub enum Utils {
 
 //I SWEAR THIS IS BETTER THAN ALL THE MAGIC NUMBERS
 pub const BUTTON_WIDTH: i32 = 12;
-pub const SPRITE_SIZE: usize = 32;
+pub const SPRITE_SIZE: usize = 16;
 const DRAW_Y: i32 = 52;
 const FRAME_RATE: i32 = 60;
-const PIXEL_SIZE: i32 = 3;
+const PIXEL_SIZE: i32 = 6;
 const CANVAS_X: i32 = 16;
 const COLORS_PER_ROW: i32 = 8;
 const COLOR_PALETTE_Y: i32 = 10;
@@ -271,16 +271,14 @@ impl SpriteEngine {
             if let (Some(content), Some((x1, y1, _, _))) =
                 (self.moving_selection_content.as_ref(), self.selection)
             {
-                let h = content.len();
-                let w = content[0].len();
-                for (r, row) in content.iter().enumerate().take(h) {
-                    for (c, col) in row.iter().enumerate().take(w) {
+                for (r, row) in content.iter().enumerate() {
+                    for (c, col) in row.iter().enumerate() {
                         let mut color = col;
                         let draw_x = CANVAS_X + (x1 + c as i32) * PIXEL_SIZE;
                         let draw_y = DRAW_Y + (y1 + r as i32) * PIXEL_SIZE;
 
                         if *color == Colors::Blank {
-                            color = if (draw_y + draw_x) % 2 == 0 {
+                            color = if (x1 + r as i32 + y1 + c as i32) % 2 == 0 {
                                 &Colors::Silver
                             } else {
                                 &Colors::White
@@ -526,7 +524,7 @@ impl SpriteEngine {
                     &mut self.pixels,
                     y + i,
                     x + j,
-                    self.sprite_sheet[true_idx as usize][i as usize * 2][j as usize * 2],
+                    self.sprite_sheet[true_idx as usize][i as usize][j as usize],
                 );
             }
         }

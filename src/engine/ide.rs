@@ -25,7 +25,6 @@ use regex::Regex;
 
 const IDE_FRAME_RATE: i32 = 30;
 const KEY_PRESS_FRAME_DELAY: i32 = 8;
-const KEY_PRESS_CONTINUOUS_FRAME_DIVISOR: i32 = 2;
 const TEXT_SPACE: usize = (SCREEN_SIZE as f32 * 1.4) as usize;
 const TEXT_HEIGHT: i32 = 6;
 const TEXT_WIDTH: i32 = 4;
@@ -489,9 +488,7 @@ impl IDEEngine {
             self.last_frame_press = false;
         };
 
-        if (self.continuous_press_frames < KEY_PRESS_FRAME_DELAY
-            && self.continuous_press_frames > 0)
-            || (self.continuous_press_frames % KEY_PRESS_CONTINUOUS_FRAME_DIVISOR != 0)
+        if self.continuous_press_frames < KEY_PRESS_FRAME_DELAY && self.continuous_press_frames > 0
         {
             return;
         }
