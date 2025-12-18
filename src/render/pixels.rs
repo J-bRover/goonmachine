@@ -1,15 +1,12 @@
 use crate::{
-    engine::{
-        rico::PixelsType,
-        sprite::{Tools, Utils, BUTTON_WIDTH},
-    },
+    engine::sprite::{Tools, Utils, BUTTON_WIDTH},
     render::{
         bitmap::{BITMAP, BITMAP4X4, BITMAP4X6},
         colors::Colors,
     },
 };
 
-pub fn set_pix(pixels: &mut PixelsType, y: i32, x: i32, col: Colors) {
+pub fn set_pix(pixels: &mut [Vec<Colors>], y: i32, x: i32, col: Colors) {
     //If the new pixel has 0 alpha, just keep the old guy
     //We don't wanna implement full alpha stuff cause pixel art
     //This much is fine for images with empty bgs
@@ -25,9 +22,8 @@ pub fn set_pix(pixels: &mut PixelsType, y: i32, x: i32, col: Colors) {
 }
 
 //Generics so we can pass in both vecs and arrays as whats necessary
-pub fn draw<P, R>(pixels: &mut PixelsType, x: i32, y: i32, img: &P)
+pub fn draw<R>(pixels: &mut [Vec<Colors>], x: i32, y: i32, img: &[R])
 where
-    P: AsRef<[R]>,
     R: AsRef<[Colors]>,
 {
     for (j, row) in img.as_ref().iter().enumerate() {
@@ -40,7 +36,7 @@ where
 /* Loop over every character and use the 8x8 bitmap
  * Use bitmasking to check which pixels to be set
  */
-pub fn print_scr(pixels: &mut PixelsType, x: i32, y: i32, col: Colors, msg: String) {
+pub fn print_scr(pixels: &mut [Vec<Colors>], x: i32, y: i32, col: Colors, msg: String) {
     for i in 0..msg.len() {
         let c = msg.as_bytes().get(i).unwrap();
         let mut idx: usize = (*c).into();
@@ -59,7 +55,7 @@ pub fn print_scr(pixels: &mut PixelsType, x: i32, y: i32, col: Colors, msg: Stri
     }
 }
 
-pub fn print_scr_mini(pixels: &mut PixelsType, x: i32, y: i32, col: Colors, msg: String) {
+pub fn print_scr_mini(pixels: &mut [Vec<Colors>], x: i32, y: i32, col: Colors, msg: String) {
     for i in 0..msg.len() {
         let c = msg.as_bytes().get(i).unwrap();
         let mut idx: usize = (*c).into();
@@ -82,7 +78,7 @@ pub fn print_scr_mini(pixels: &mut PixelsType, x: i32, y: i32, col: Colors, msg:
     }
 }
 
-pub fn print_scr_mid(pixels: &mut PixelsType, x: i32, y: i32, col: Colors, msg: String) {
+pub fn print_scr_mid(pixels: &mut [Vec<Colors>], x: i32, y: i32, col: Colors, msg: String) {
     for i in 0..msg.len() {
         let c = msg.as_bytes().get(i).unwrap();
         let mut idx: usize = (*c).into();
@@ -104,7 +100,7 @@ pub fn print_scr_mid(pixels: &mut PixelsType, x: i32, y: i32, col: Colors, msg: 
     }
 }
 
-pub fn rect_fill(pixels: &mut PixelsType, x: i32, y: i32, w: i32, h: i32, col: Colors) {
+pub fn rect_fill(pixels: &mut [Vec<Colors>], x: i32, y: i32, w: i32, h: i32, col: Colors) {
     for j in x..x + w {
         for i in y..y + h {
             set_pix(pixels, i, j, col);
@@ -112,7 +108,7 @@ pub fn rect_fill(pixels: &mut PixelsType, x: i32, y: i32, w: i32, h: i32, col: C
     }
 }
 
-pub fn rect(pixels: &mut PixelsType, x: i32, y: i32, w: i32, h: i32, col: Colors) {
+pub fn rect(pixels: &mut [Vec<Colors>], x: i32, y: i32, w: i32, h: i32, col: Colors) {
     for i in x..x + w {
         set_pix(pixels, y, i, col);
         set_pix(pixels, y + h, i, col);
@@ -127,7 +123,7 @@ pub fn rect(pixels: &mut PixelsType, x: i32, y: i32, w: i32, h: i32, col: Colors
 }
 
 //This kinda gives weird results we might wanna switch out the algorithm at some point
-pub fn circle(pixels: &mut PixelsType, cx: i32, cy: i32, r: i32, col: Colors) {
+pub fn circle(pixels: &mut [Vec<Colors>], cx: i32, cy: i32, r: i32, col: Colors) {
     let r2 = r * r;
     for x in cx - r..=cx + r {
         for y in cy - r..=cy + r {
@@ -140,7 +136,7 @@ pub fn circle(pixels: &mut PixelsType, cx: i32, cy: i32, r: i32, col: Colors) {
     }
 }
 
-pub fn clear(pixels: &mut PixelsType, col: Colors) {
+pub fn clear(pixels: &mut [Vec<Colors>], col: Colors) {
     let height = pixels.len() as i32;
     let width = pixels[0].len() as i32;
     for y in 0..height {

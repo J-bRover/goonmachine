@@ -394,6 +394,7 @@ impl SpriteEngine {
                     self.undo_stack.push(pushing)
                 };
             }
+            self.upto_date = false;
         } else {
             self.last_frame_ur = false;
         }
