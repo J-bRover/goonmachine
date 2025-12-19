@@ -518,11 +518,10 @@ pub fn handle_engine_update(
     eng.reset_inputs();
 }
 
-/* IMPORTANT:
- * Currently parallalized with rayon but its lowkey useless
- * It spends half the time just switching mutex locks so we might wanna just single
- * thread this. Shouldn't change too much, we're pretty efficient alr.
- */
+// IMPORTANT: 70% of our time, according to perf, is spent doing pixels:Pixels gpu stuff.
+// Idk if optimizing how much we write to buffers here will help there tho. Might just
+// Do every pixel every frame cause its GPU regardless ;-;. We dont really need to tho we're
+// at like 180 fps rn.
 pub fn copy_pixels_into_buffer(
     pixels: &PixelsType,
     buffer: &mut [u8],
@@ -532,28 +531,25 @@ pub fn copy_pixels_into_buffer(
     let height = pixels.len();
     let width = pixels[0].len();
 
-    let mut buf_tmp = vec![0u8; width * height * SCALE * SCALE * 4];
+    buffer
+        .par_chunks_mut(WINDOW_WIDTH * 4)
+        .skip(start_y)
+        .take(height * SCALE)
+        .enumerate()
+        .for_each(|(out_y, row)| {
+            let src_y = out_y / SCALE;
+            let dst_start = start_x * 4;
 
-    buf_tmp.par_chunks_mut(width * SCALE * 4).enumerate().for_each(|(out_y, row)| {
-        let src_y = out_y / SCALE;
+            for (x, pix) in pixels[src_y].iter().enumerate().take(width) {
+                let rgba = pix.rgba();
+                let base = dst_start + x * SCALE * 4;
 
-        for (x, pix) in pixels[src_y].iter().enumerate().take(width) {
-            let (r, g, b, a) = pix.rgba();
-            let base = x * SCALE * 4;
-            for dx in 0..SCALE {
-                let i = base + dx * 4;
-                row[i..i + 4].copy_from_slice(&[r, g, b, a]);
+                for dx in 0..SCALE {
+                    let i = base + dx * 4;
+                    row[i..i + 4].copy_from_slice(&rgba);
+                }
             }
-        }
-    });
-
-    for y in 0..height * SCALE {
-        let dst_row = ((start_y + y) * WINDOW_WIDTH + start_x) * 4;
-        let src_row = y * width * SCALE * 4;
-
-        buffer[dst_row..dst_row + width * SCALE * 4]
-            .copy_from_slice(&buf_tmp[src_row..src_row + width * SCALE * 4]);
-    }
+        });
 }
 
 pub fn bind_keyboard(keyboard: &mut Keyboard, state: ElementState, keycode: VirtualKeyCode) {
