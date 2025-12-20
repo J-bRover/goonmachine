@@ -521,7 +521,7 @@ pub fn handle_engine_update(
 // IMPORTANT: 70% of our time, according to perf, is spent doing pixels:Pixels gpu stuff.
 // Idk if optimizing how much we write to buffers here will help there tho. Might just
 // Do every pixel every frame cause its GPU regardless ;-;. We dont really need to tho we're
-// at like 180 fps rn.
+// at like 600 fps rn without vsync lmfao.
 pub fn copy_pixels_into_buffer(
     pixels: &PixelsType,
     buffer: &mut [u8],

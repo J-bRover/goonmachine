@@ -148,6 +148,7 @@ impl TerminalEngine {
                     }
                     VirtualKeyCode::Return => {
                         let cmd = self.input.clone();
+                        self.add_log(LogTypes::Ok("".to_string()));
                         self.add_log(LogTypes::Action("> ".to_string() + &cmd));
 
                         match self.parse_command(&cmd) {
@@ -174,13 +175,13 @@ impl TerminalEngine {
         })
     }
 
-    fn render_cursor(&mut self) {
+    fn render_cursor(&mut self, logs: usize) {
         rect_fill(
             &mut self.pixels,
             4 * (self.cursor as i32 + 2),
-            SCREEN_SIZE as i32 * 2 - 6,
+            (self.logs.len() - logs) as i32 * 6 + 6,
             1,
-            5,
+            6,
             Colors::Red,
         );
     }
@@ -193,7 +194,8 @@ impl TerminalEngine {
 
         self.commands.clear();
 
-        for (i, log) in self.logs[self.logs.len().saturating_sub(38)..].iter().enumerate() {
+        let showing_logs = self.logs.len().saturating_sub(38);
+        for (i, log) in self.logs[showing_logs..].iter().enumerate() {
             let col = match log {
                 LogTypes::Err(_) => Colors::Maroon,
                 LogTypes::Ok(_) => Colors::White,
@@ -204,13 +206,13 @@ impl TerminalEngine {
         print_scr_mid(
             &mut self.pixels,
             1,
-            SCREEN_SIZE as i32 * 2 - 6,
+            (self.logs.len() - showing_logs) as i32 * 6 + 6,
             Colors::White,
             "> ".to_string() + &self.input,
         );
 
         if self.handle_inputs() || self.frame_hash > 10 {
-            self.render_cursor();
+            self.render_cursor(showing_logs);
         };
     }
 }
