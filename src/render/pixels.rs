@@ -136,6 +136,54 @@ pub fn circle(pixels: &mut [Vec<Colors>], cx: i32, cy: i32, r: i32, col: Colors)
     }
 }
 
+//https://gist.github.com/kukosek/59a56076c75471c443a85890d8e9ad5a
+pub fn line(pixels: &mut [Vec<Colors>], mut x: i32, mut y: i32, x2: i32, y2: i32, col: Colors) {
+    let w = x2 - x;
+    let h = y2 - y;
+    let (mut dx1, mut dy1, mut dx2, mut dy2) = (0, 0, 0, 0);
+
+    if w < 0 {
+        dx1 = -1
+    } else if w > 0 {
+        dx1 = 1
+    };
+    if h < 0 {
+        dy1 = -1
+    } else if h > 0 {
+        dy1 = 1
+    };
+    if w < 0 {
+        dx2 = -1
+    } else if w > 0 {
+        dx2 = 1
+    };
+
+    let mut longest = w.abs();
+    let mut shortest = h.abs();
+    if longest <= shortest {
+        (shortest, longest) = (longest, shortest);
+        if h < 0 {
+            dy2 = -1
+        } else if h > 0 {
+            dy2 = 1
+        };
+        dx2 = 0;
+    }
+    let mut numerator = longest >> 1;
+    for _ in 0..=longest {
+        set_pix(pixels, y, x, col);
+        numerator += shortest;
+        if numerator >= longest {
+            numerator -= longest;
+            x += dx1;
+            y += dy1;
+        } else {
+            x += dx2;
+            y += dy2;
+        }
+    }
+}
+
 pub fn clear(pixels: &mut [Vec<Colors>], col: Colors) {
     let height = pixels.len() as i32;
     let width = pixels[0].len() as i32;

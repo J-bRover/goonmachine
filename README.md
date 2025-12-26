@@ -288,6 +288,14 @@ Draws a filled circle.
 - `r` (number): Radius
 - `COLOR` (string): Fill color
 
+#### `line(x, y, x1, y1, COLOR)`
+Draws a line between 2 points. Automatically handles vertical, horizontal, steep lines. Order of the points does not matter.
+
+**Parameters:**
+- `x, y` (number): Coordinates of the first point
+- `x1, y1` (number): Coordinates of the second point
+- `COLOR` (string): Fill color
+
 #### `draw(x, y, idx)`
 Draws a sprite created in the sprite engine.
 

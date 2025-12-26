@@ -1,4 +1,5 @@
 use crate::engine::rico::ScreenEngine;
+use crate::render::pixels::line;
 use macros::ScreenEngine;
 use mlua::prelude::LuaResult;
 use std::rc::Rc;
@@ -181,6 +182,15 @@ impl UserData for LuaAPIHandle {
             circle(&mut this.0.borrow_mut().pixels, x, y, r, c);
             Ok(())
         });
+
+        methods.add_method_mut(
+            "line",
+            |_, this, (x, y, x1, y1, col): (i32, i32, i32, i32, String)| {
+                let c = col_from_str(col)?;
+                line(&mut this.0.borrow_mut().pixels, x, y, x1, y1, c);
+                Ok(())
+            },
+        );
 
         methods.add_method_mut("clear", |_, this, col: String| {
             let c = col_from_str(col)?;
