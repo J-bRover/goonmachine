@@ -84,10 +84,10 @@ pub fn print_scr_mid(pixels: &mut [Vec<Colors>], x: i32, y: i32, col: Colors, ms
         let mut idx: usize = (*c).into();
 
         idx -= 32;
+        idx *= 6;
         if idx >= BITMAP4X6.len() {
             idx = 0;
         }
-        idx *= 6;
 
         for dy in 0..6 {
             let row = BITMAP4X6[idx + dy];
