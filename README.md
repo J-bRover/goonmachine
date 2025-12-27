@@ -132,11 +132,11 @@ end
 
 ## Sprite Engine
 
-RICO-32 includes a built-in sprite editor for creating and managing 32×32 pixel sprites. Access the sprite editor from the main interface to design sprites that can be used in your games.
+RICO-32 includes a built-in sprite editor for creating and managing 16x16 pixel sprites. Access the sprite editor from the main interface to design sprites that can be used in your games.
 
 ### Features
 
-- **32×32 Sprite Canvas**: Edit sprites pixel-by-pixel with a 3× zoomed preview
+- **16x16 Sprite Canvas**: Edit sprites pixel-by-pixel with a 6× zoomed preview
 - **60-Sprite Sheet**: Store up to 60 sprites (expandable) in a persistent sprite sheet
      - RICO-32 features an inbuilt sprite file spec to store and read the sprite sheet for the engine
 - **Drawing Tools**:
